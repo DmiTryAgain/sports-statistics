@@ -84,7 +84,7 @@ func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
 
 func prepareInput(inputText string) []string {
 	var needle = regexp.MustCompile(`[[:punct:]]`)
-	return strings.Split(needle.ReplaceAllString(inputText, ""), " ")
+	return strings.Split(needle.ReplaceAllString(strings.ToLower(inputText), ""), " ")
 }
 
 func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool {
