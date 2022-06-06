@@ -11,6 +11,7 @@ import (
 )
 
 const TOKEN = "TELEGRAM_BOT_TOKEN"
+const BOT_NAME = "TELEGRAM_BOT_NAME"
 
 // init is invoked before main()
 func init() {
@@ -21,6 +22,7 @@ func init() {
 
 func main() {
 	var token, _ = os.LookupEnv(TOKEN)
+	var botName, _ = os.LookupEnv(BOT_NAME)
 
 	bot := createBot(token)
 
@@ -34,8 +36,14 @@ func main() {
 	for update := range updates {
 		if update.Message != nil { // If we got a message
 			//log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-			input := strings.Split(update.Message.Text, " ")
-			command, isValidCommand := handleInputCommand(input[0])
+
+			input := prepareInput(update.Message.Text)
+
+			if !checkBotCall(update, input[0], botName) {
+				continue
+			}
+
+			command, isValidCommand := handleInputCommand(input[1])
 
 			//Проверка команды в сообщении на валидность
 			if !isValidCommand {
@@ -44,7 +52,7 @@ func main() {
 			}
 
 			// TODO: Handle commands
-			sendMessage(bot, update, command)
+			sendMessage(bot, update, "Мне нужно сделать "+command)
 		}
 	}
 }
@@ -64,15 +72,31 @@ func handleInputCommand(command string) (string, bool) {
 		fmt.Println(err)
 	}
 
-	fmt.Println(isText, err)
-
 	return command, isText
 }
 
 func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
-
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
 	msg.ReplyToMessageID = update.Message.MessageID
 
 	bot.Send(msg)
+}
+
+func prepareInput(inputText string) []string {
+	var needle = regexp.MustCompile(`[[:punct:]]`)
+	return strings.Split(needle.ReplaceAllString(strings.ToLower(inputText), ""), " ")
+}
+
+func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool {
+	if update.Message.Entities == nil {
+		return false
+	}
+
+	for _, Entity := range *update.Message.Entities {
+		if Entity.Type != "mention" || firstWord != botName {
+			return false
+		}
+	}
+
+	return true
 }
