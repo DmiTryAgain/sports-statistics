@@ -51,7 +51,17 @@ func main() {
 				continue
 			}
 
-			// TODO: Handle commands
+			/**
+			 * TODO: однокоренные команды (удали/удалить и т.п. + синонимы)
+			 */
+
+			switch command {
+			case "сделал":
+
+			case "удали":
+			case "покажи":
+			}
+
 			sendMessage(bot, update, "Мне нужно сделать "+command)
 		}
 	}
