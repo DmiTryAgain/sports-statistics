@@ -20,3 +20,4 @@ services:
     volumes:
       - ./logs/mysql:/var/log/mysql
       - ./data/mysql:/var/lib/mysql
+      - ./containers/mysql/dump:/docker-entrypoint-initdb.d
