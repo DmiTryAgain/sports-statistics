@@ -1,7 +1,9 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/joho/godotenv"
 	"log"
@@ -12,10 +14,23 @@ import (
 
 const TOKEN = "TELEGRAM_BOT_TOKEN"
 const BOT_NAME = "TELEGRAM_BOT_NAME"
+const DB_USERNAME = "DB_USERNAME"
+const DB_PASSWORD = "DB_PASSWORD"
+const DB_DATABASE = "DB_DATABASE"
+const DB_CHARSET = "DB_CHARSET"
+const DB_HOST = "DB_HOST"
+const DB_DSN = "DB_DSN"
+const DB_TYPE = "DB_TYPE"
+
+type Training struct {
+	id    int
+	alias string
+	name  string
+}
 
 // init is invoked before main()
 func init() {
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load(".env", "docker\\.env"); err != nil {
 		log.Print("Создай .env (смотри .env-sample)")
 	}
 }
@@ -23,6 +38,13 @@ func init() {
 func main() {
 	var token, _ = os.LookupEnv(TOKEN)
 	var botName, _ = os.LookupEnv(BOT_NAME)
+	//var dbUser, _ = os.LookupEnv(DB_USERNAME)
+	//var dbPass, _ = os.LookupEnv(DB_PASSWORD)
+	//var dbName, _ = os.LookupEnv(DB_DATABASE)
+	//var dbCharset, _ = os.LookupEnv(DB_CHARSET)
+	//var dbHost, _ = os.LookupEnv(DB_HOST)
+	var dbDsn, _ = os.LookupEnv(DB_DSN)
+	var dbType, _ = os.LookupEnv(DB_TYPE)
 
 	bot := createBot(token)
 
@@ -39,30 +61,85 @@ func main() {
 
 			input := prepareInput(update.Message.Text)
 
-			if !checkBotCall(update, input[0], botName) {
+			if !checkBotCall(update, input[0], strings.ToLower(botName)) {
 				continue
 			}
 
-			command, isValidCommand := handleInputCommand(input[1])
+			command, isValidCommand := checkIsText(input[1])
 
 			//Проверка команды в сообщении на валидность
 			if !isValidCommand {
-				sendMessage(bot, update, "Я не понял, чё ты хочешь.")
+				sendMessage(bot, update, "Ты как-то ввёл некорректно команду.")
 				continue
 			}
 
 			/**
 			 * TODO: однокоренные команды (удали/удалить и т.п. + синонимы)
 			 */
+			db, err := sql.Open(dbType, dbDsn)
+
+			if err != nil {
+				panic(err)
+			}
 
 			switch command {
 			case "сделал":
 
+				count, isValidCount := checkIsInt(input[2])
+
+				//Проверка указанного количества в сообщении на валидность
+				if !isValidCount {
+					sendMessage(bot, update, "Какое-то непонятное количество ты указал.")
+					continue
+				}
+
+				training, isValidTraining := checkIsText(input[3])
+
+				//Проверка указанного количества в сообщении на валидность
+				if !isValidTraining {
+					sendMessage(bot, update, "Указанное упражнение некорректно.")
+					continue
+				}
+
+				findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `name` = %s LIMIT 1"), training)
+
+				if len(findTrain) {
+
+				}
+
+				var train Training
+				err = findTrain.Scan(&train.id)
+
+				if err != nil {
+					panic(err)
+				}
+
+				insert, err := db.Query(
+					fmt.Sprintf(
+						"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES(%d, %d, %d)",
+						update.Message.Contact.UserID,
+						&train.id,
+						count,
+					),
+				)
+
+				defer insert.Close()
+
+				if err != nil {
+					panic(err)
+				}
+
+				sendMessage(bot, update, "Добавлено "+count+" "+train.name)
+
+				defer findTrain.Close()
+
 			case "удали":
 			case "покажи":
+			default:
+				sendMessage(bot, update, "Ты как-то ввёл некорректно команду.")
 			}
 
-			sendMessage(bot, update, "Мне нужно сделать "+command)
+			defer db.Close()
 		}
 	}
 }
@@ -76,13 +153,22 @@ func createBot(token string) *tgbotapi.BotAPI {
 	return bot
 }
 
-func handleInputCommand(command string) (string, bool) {
+func checkIsText(command string) (string, bool) {
 	var isText, err = regexp.MatchString(`^[а-яА-ЯёЁ]+$`, command)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	return command, isText
+}
+
+func checkIsInt(count string) (string, bool) {
+	var isInt, err = regexp.MatchString(`^(\d+)$`, count)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	return count, isInt
 }
 
 func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
