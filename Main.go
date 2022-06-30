@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -23,10 +24,11 @@ const DB_DSN = "DB_DSN"
 const DB_TYPE = "DB_TYPE"
 
 type Training struct {
-	id    int
-	alias string
-	name  string
+	Id          int
+	Alias, Name string
 }
+
+var trainings []Training
 
 // init is invoked before main()
 func init() {
@@ -95,30 +97,29 @@ func main() {
 
 				training, isValidTraining := checkIsText(input[3])
 
-				//Проверка указанного количества в сообщении на валидность
+				//Проверка указанного упражнения в сообщении на валидность
 				if !isValidTraining {
 					sendMessage(bot, update, "Указанное упражнение некорректно.")
 					continue
 				}
 
-				findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `name` = %s LIMIT 1"), training)
-
-				if len(findTrain) {
-
-				}
+				findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
 
 				var train Training
-				err = findTrain.Scan(&train.id)
+				for findTrain.Next() {
+					err = findTrain.Scan(&train.Id, &train.Alias, &train.Name)
+					if err != nil {
+						panic(err)
+					}
 
-				if err != nil {
-					panic(err)
+					trainings = append(trainings, train)
 				}
 
 				insert, err := db.Query(
 					fmt.Sprintf(
-						"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES(%d, %d, %d)",
-						update.Message.Contact.UserID,
-						&train.id,
+						"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES('%d', '%d', '%d')",
+						update.Message.From.ID,
+						&train.Id,
 						count,
 					),
 				)
@@ -129,9 +130,9 @@ func main() {
 					panic(err)
 				}
 
-				sendMessage(bot, update, "Добавлено "+count+" "+train.name)
-
 				defer findTrain.Close()
+
+				sendMessage(bot, update, fmt.Sprintf("Добавлено %d "+train.Name, count))
 
 			case "удали":
 			case "покажи":
@@ -162,13 +163,15 @@ func checkIsText(command string) (string, bool) {
 	return command, isText
 }
 
-func checkIsInt(count string) (string, bool) {
+func checkIsInt(count string) (int, bool) {
 	var isInt, err = regexp.MatchString(`^(\d+)$`, count)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	return count, isInt
+	countInt, _ := strconv.Atoi(count)
+
+	return countInt, isInt
 }
 
 func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
