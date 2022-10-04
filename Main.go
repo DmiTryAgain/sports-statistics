@@ -80,7 +80,7 @@ func main() {
 
 			//Проверка команды в сообщении на валидность
 			if !isValidCommand {
-				sendMessage(bot, update, "Ты как-то ввёл некорректно команду.")
+				sendMessage(bot, update, "Команда содержит недопустимые символы.")
 				continue
 			}
 
