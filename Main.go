@@ -167,7 +167,7 @@ func main() {
 			case "удали":
 			case "покажи":
 			default:
-				sendMessage(bot, update, "Команда введена некорректно.")
+				sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" не найдена.", command))
 			}
 
 			defer db.Close()
