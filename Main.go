@@ -15,6 +15,7 @@ import (
 
 const TOKEN = "TELEGRAM_BOT_TOKEN"
 const BOT_NAME = "TELEGRAM_BOT_NAME"
+
 const DB_USERNAME = "DB_USERNAME"
 const DB_PASSWORD = "DB_PASSWORD"
 const DB_DATABASE = "DB_DATABASE"
@@ -23,17 +24,18 @@ const DB_HOST = "DB_HOST"
 const DB_DSN = "DB_DSN"
 const DB_TYPE = "DB_TYPE"
 
+const CHAT_TYPE_GROUP = "group"
+
 type Training struct {
 	Id          int
 	Alias, Name string
 }
 
-var trainings []Training
-
 // init is invoked before main()
 func init() {
 	if err := godotenv.Load(".env", "docker\\.env"); err != nil {
 		log.Print("Создай .env (смотри .env-sample)")
+		panic(err)
 	}
 }
 
@@ -59,15 +61,22 @@ func main() {
 
 	for update := range updates {
 		if update.Message != nil { // If we got a message
-			//log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
+			//log.Printf("[%s] %s", update.Message.Chat.Type, update.Message.Text)
 			input := prepareInput(update.Message.Text)
+			lowerBotName := strings.ToLower(botName)
 
-			if !checkBotCall(update, input[0], strings.ToLower(botName)) {
+			if !checkBotCall(update, input[0], lowerBotName) && update.Message.Chat.Type == CHAT_TYPE_GROUP {
 				continue
+			} else if checkBotCall(update, input[0], lowerBotName) {
+				input = deleteElemFromSlice(input, 0)
+
+				if len(input) == 0 {
+					sendMessage(bot, update, "Чё?")
+					continue
+				}
 			}
 
-			command, isValidCommand := checkIsText(input[1])
+			command, isValidCommand := checkIsText(input[0])
 
 			//Проверка команды в сообщении на валидность
 			if !isValidCommand {
@@ -75,51 +84,72 @@ func main() {
 				continue
 			}
 
-			/**
-			 * TODO: однокоренные команды (удали/удалить и т.п. + синонимы)
-			 */
 			db, err := sql.Open(dbType, dbDsn)
 
 			if err != nil {
-				panic(err)
+				sendMessage(bot, update, fmt.Sprintf("Ошибка подключения к базе данных: %d ", err))
 			}
 
 			switch command {
 			case "сделал":
 
+				if len(input) < 3 {
+					sendMessage(bot, update, "Введи корректное наименование упражнения и число повторений.")
+					continue
+				}
+
+				training, isValidTraining := checkIsText(input[1])
+
+				//Проверка указанного упражнения в сообщении на валидность
+				if !isValidTraining {
+					sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
+					continue
+				}
+
 				count, isValidCount := checkIsInt(input[2])
 
 				//Проверка указанного количества в сообщении на валидность
 				if !isValidCount {
-					sendMessage(bot, update, "Какое-то непонятное количество ты указал.")
+					sendMessage(bot, update, "Указанное количество содержит некорректные символы.")
 					continue
 				}
 
-				training, isValidTraining := checkIsText(input[3])
-
-				//Проверка указанного упражнения в сообщении на валидность
-				if !isValidTraining {
-					sendMessage(bot, update, "Указанное упражнение некорректно.")
-					continue
-				}
-
+				//Поиск упражнения в БД
 				findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
 
+				if err != nil {
+					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+					continue
+				}
+
+				var trainings []Training
 				var train Training
+
 				for findTrain.Next() {
 					err = findTrain.Scan(&train.Id, &train.Alias, &train.Name)
 					if err != nil {
-						panic(err)
+						sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
 					}
 
 					trainings = append(trainings, train)
+				}
+
+				if train.Id == 0 {
+					sendMessage(bot, update, fmt.Sprintf("Упражнение \"%s\" не найдено.", training))
+					err := findTrain.Close()
+
+					if err != nil {
+						sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+					}
+
+					continue
 				}
 
 				insert, err := db.Query(
 					fmt.Sprintf(
 						"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES('%d', '%d', '%d')",
 						update.Message.From.ID,
-						&train.Id,
+						train.Id,
 						count,
 					),
 				)
@@ -132,12 +162,12 @@ func main() {
 
 				defer findTrain.Close()
 
-				sendMessage(bot, update, fmt.Sprintf("Добавлено %d "+train.Name, count))
+				sendMessage(bot, update, fmt.Sprintf("Добавлено %s %d ", training, count))
 
 			case "удали":
 			case "покажи":
 			default:
-				sendMessage(bot, update, "Ты как-то ввёл некорректно команду.")
+				sendMessage(bot, update, "Команда введена некорректно.")
 			}
 
 			defer db.Close()
@@ -182,7 +212,7 @@ func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
 }
 
 func prepareInput(inputText string) []string {
-	var needle = regexp.MustCompile(`[[:punct:]]`)
+	needle := regexp.MustCompile(`[[:punct:]]`)
 	return strings.Split(needle.ReplaceAllString(strings.ToLower(inputText), ""), " ")
 }
 
@@ -198,4 +228,9 @@ func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool
 	}
 
 	return true
+}
+
+// Удалить элемент по индексу из слайса.
+func deleteElemFromSlice(slice []string, index int) []string {
+	return append(slice[:index], slice[index+1:]...)
 }

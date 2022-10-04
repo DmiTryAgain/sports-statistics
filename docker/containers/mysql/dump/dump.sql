@@ -28,9 +28,7 @@ CREATE TABLE `statistic` (
   `training_id` int(11) NOT NULL,
   `count` int(11) NOT NULL DEFAULT '0',
   `created` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `telegram_user_id` (`telegram_user_id`),
-  UNIQUE KEY `training_id` (`training_id`)
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
