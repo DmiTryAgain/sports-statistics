@@ -1,0 +1,23 @@
+version: '2'
+
+services:
+  mysql:
+    ports:
+      - "3306:3306"
+    build:
+      context: ./containers/mysql
+      dockerfile: ./Dockerfile
+      args:
+        USER_ID: '1000'
+        GROUP_ID: '1000'
+    container_name: "sports_statistics_mysql"
+    environment:
+      MYSQL_DATABASE: ${DB_USERNAME}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: password
+    restart: unless-stopped
+    volumes:
+      - ./logs/mysql:/var/log/mysql
+      - ./data/mysql:/var/lib/mysql
+      - ./containers/mysql/dump:/docker-entrypoint-initdb.d
