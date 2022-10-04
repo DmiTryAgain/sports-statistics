@@ -60,118 +60,154 @@ func main() {
 	updates, _ := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		if update.Message != nil { // If we got a message
-			//log.Printf("[%s] %s", update.Message.Chat.Type, update.Message.Text)
-			input := prepareInput(update.Message.Text)
-			lowerBotName := strings.ToLower(botName)
+		input := prepareInput(update.Message.Text)
+		lowerBotName := strings.ToLower(botName)
 
-			if !checkBotCall(update, input[0], lowerBotName) && update.Message.Chat.Type == CHAT_TYPE_GROUP {
-				continue
-			} else if checkBotCall(update, input[0], lowerBotName) {
-				input = deleteElemFromSlice(input, 0)
+		if !checkBotCall(update, input[0], lowerBotName) && update.Message.Chat.Type == CHAT_TYPE_GROUP {
+			continue
+		} else if checkBotCall(update, input[0], lowerBotName) {
+			input = deleteElemFromSlice(input, 0)
 
-				if len(input) == 0 {
-					sendMessage(bot, update, "Чё?")
-					continue
-				}
-			}
-
-			command, isValidCommand := checkIsText(input[0])
-
-			//Проверка команды в сообщении на валидность
-			if !isValidCommand {
-				sendMessage(bot, update, "Команда содержит недопустимые символы.")
+			if len(input) == 0 {
+				sendMessage(bot, update, "Чё?")
 				continue
 			}
+		}
 
-			db, err := sql.Open(dbType, dbDsn)
+		log.Printf("Message info: \n"+
+			"UserName: %s\n"+
+			"ChatId: %d\n"+
+			"ChatType: %s\n"+
+			"Message: %s\n"+
+			"UserId: %d\n",
+			update.Message.Chat.UserName,
+			update.Message.Chat.ID,
+			update.Message.Chat.Type,
+			update.Message.Text,
+			update.Message.From.ID,
+		)
+
+		command, isValidCommand := checkIsText(input[0])
+
+		//Проверка команды в сообщении на валидность
+		if !isValidCommand {
+			sendMessage(bot, update, "Команда содержит недопустимые символы.")
+			continue
+		}
+
+		db, err := sql.Open(dbType, dbDsn)
+
+		if err != nil {
+			sendMessage(bot, update, fmt.Sprintf("Ошибка подключения к базе данных: %d ", err))
+		}
+
+		switch command {
+		case "сделал":
+
+			if len(input) < 3 {
+				sendMessage(bot, update, "Введи корректное наименование упражнения и число повторений.")
+				continue
+			}
+
+			training, isValidTraining := checkIsText(input[1])
+
+			//Проверка указанного упражнения в сообщении на валидность
+			if !isValidTraining {
+				sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
+				continue
+			}
+
+			count, isValidCount := checkIsInt(input[2])
+
+			//Проверка указанного количества в сообщении на валидность
+			if !isValidCount {
+				sendMessage(bot, update, "Указанное количество содержит некорректные символы.")
+				continue
+			}
+
+			//Поиск упражнения в БД
+			findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
 
 			if err != nil {
-				sendMessage(bot, update, fmt.Sprintf("Ошибка подключения к базе данных: %d ", err))
+				sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+				continue
 			}
 
-			switch command {
-			case "сделал":
+			var trainings []Training
+			var train Training
 
-				if len(input) < 3 {
-					sendMessage(bot, update, "Введи корректное наименование упражнения и число повторений.")
-					continue
+			for findTrain.Next() {
+				err = findTrain.Scan(&train.Id, &train.Alias, &train.Name)
+				if err != nil {
+					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
 				}
 
-				training, isValidTraining := checkIsText(input[1])
+				trainings = append(trainings, train)
+			}
 
-				//Проверка указанного упражнения в сообщении на валидность
-				if !isValidTraining {
-					sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
-					continue
-				}
-
-				count, isValidCount := checkIsInt(input[2])
-
-				//Проверка указанного количества в сообщении на валидность
-				if !isValidCount {
-					sendMessage(bot, update, "Указанное количество содержит некорректные символы.")
-					continue
-				}
-
-				//Поиск упражнения в БД
-				findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
+			if train.Id == 0 {
+				sendMessage(bot, update, fmt.Sprintf("Упражнение \"%s\" не найдено.", training))
+				err := findTrain.Close()
 
 				if err != nil {
 					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					continue
 				}
 
-				var trainings []Training
-				var train Training
-
-				for findTrain.Next() {
-					err = findTrain.Scan(&train.Id, &train.Alias, &train.Name)
-					if err != nil {
-						sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					}
-
-					trainings = append(trainings, train)
-				}
-
-				if train.Id == 0 {
-					sendMessage(bot, update, fmt.Sprintf("Упражнение \"%s\" не найдено.", training))
-					err := findTrain.Close()
-
-					if err != nil {
-						sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					}
-
-					continue
-				}
-
-				insert, err := db.Query(
-					fmt.Sprintf(
-						"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES('%d', '%d', '%d')",
-						update.Message.From.ID,
-						train.Id,
-						count,
-					),
-				)
-
-				defer insert.Close()
-
-				if err != nil {
-					panic(err)
-				}
-
-				defer findTrain.Close()
-
-				sendMessage(bot, update, fmt.Sprintf("Добавлено %s %d ", training, count))
-
-			case "удали":
-			case "покажи":
-			default:
-				sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" не найдена.", command))
+				continue
 			}
 
-			defer db.Close()
+			insert, err := db.Query(
+				fmt.Sprintf(
+					"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES('%d', '%d', '%d')",
+					update.Message.From.ID,
+					train.Id,
+					count,
+				),
+			)
+
+			insert.Close()
+
+			if err != nil {
+				panic(err)
+			}
+
+			findTrain.Close()
+
+			sendMessage(bot, update, fmt.Sprintf("Добавлено %s %d ", training, count))
+
+		case "удали":
+			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
+		case "покажи":
+			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
+		case "help", "помоги", "помощь":
+			sendMessage(
+				bot,
+				update,
+				fmt.Sprintf(
+					"Привет! Я - бот, который поможет вести статистику спортивных упражнений, которые "+
+						"ты выполняешь. Ты же ведь занимаешься спортом, верно?🤔\n"+
+						"Так вот, чтоб было удобно вести учёт и смотреть статистику, ты можешь это делать "+
+						"с помощью команд ко мне.\n"+
+						"Я слушаю команды, когда ко мне обращаются. обратись ко мне вот так: `@%s`\n"+
+						"Исключением является личная переписка. Если ты напишешь мне в личку, я буду реагировать на "+
+						"любые твои сообщения. Но и в личных сообщениях поддерживается обращение, "+
+						"если уж сильно хочется)\n"+
+						"После обращения через пробел нужно написать команду и передать к ней данные, "+
+						"чтобы записать/показать результаты."+
+						"Список поддерживаемых команд: \n"+
+						"Чтобы записать результаты, воспользуйтесь командой ``, напишите название упражнения и "+
+						"количество повторений, которое сделали. Все слова отделяйте пробелом.\n"+
+						"Например, Вы сделали подход из 10 подтягиваний. Чтобы я всё корректно записал, напишите в "+
+						"чат: `@%s сделал подтягивание 10`",
+					botName,
+					botName,
+				),
+			)
+		default:
+			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" не найдена.", command))
 		}
+
+		db.Close()
 	}
 }
 
@@ -206,6 +242,7 @@ func checkIsInt(count string) (int, bool) {
 
 func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ParseMode = "markdown"
 	msg.ReplyToMessageID = update.Message.MessageID
 
 	bot.Send(msg)
