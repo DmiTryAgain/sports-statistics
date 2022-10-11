@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const TOKEN = "TELEGRAM_BOT_TOKEN"
@@ -50,6 +51,15 @@ func main() {
 	var dbDsn, _ = os.LookupEnv(DB_DSN)
 	var dbType, _ = os.LookupEnv(DB_TYPE)
 
+	conditionsByPeriod := map[string]string{
+		"сегодня":   "YEAR(`created`) = YEAR(NOW()) AND WEEK(`created`, 1) = WEEK(NOW(), 1) AND DAY(`created`) = DAY(NOW())",
+		"вчера":     "WHERE MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -1 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -1 DAY))",
+		"позавчера": "WHERE MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -2 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -2 DAY))",
+		"неделю":    "YEAR(`created`) = YEAR(NOW()) AND WEEK(`created`, 1) = WEEK(NOW(), 1)",
+		"месяц":     "MONTH(`created`) = MONTH(NOW()) AND YEAR(`created`) = YEAR(NOW())",
+		"год":       "YEAR(`created`) = YEAR(NOW())",
+	}
+
 	bot := createBot(token)
 
 	//bot.Debug = true
@@ -60,7 +70,7 @@ func main() {
 	updates, _ := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		input := prepareInput(update.Message.Text)
+		input := prepareInput(update.Message.Text, " ")
 		lowerBotName := strings.ToLower(botName)
 
 		if !checkBotCall(update, input[0], lowerBotName) && update.Message.Chat.Type == CHAT_TYPE_GROUP {
@@ -175,9 +185,82 @@ func main() {
 
 			sendMessage(bot, update, fmt.Sprintf("Добавлено %s %d ", training, count))
 
-		case "удали":
+		case "покажи", "выведи":
+
+			inputByPeriod := prepareInput(update.Message.Text, " за ")
+
+			if len(inputByPeriod) < 2 {
+				sendMessage(bot, update, "Введи корректно что именно показать и период.")
+				continue
+			}
+
+			/** TODO */
+			inputTrainings := deleteElemFromSlice(prepareInput(inputByPeriod[0], " "), 0)
+			periods := deleteElemFromSlice(inputByPeriod, 0)
+			var wheres []string
+			var invalidPeriods []string
+
+			for _, value := range periods {
+				_, isValidText := checkIsText(value)
+
+				if isValidText {
+					if conditionsByPeriod[value] != "" {
+						wheres = append(wheres, conditionsByPeriod[value])
+					} else {
+						invalidPeriods = append(invalidPeriods, value)
+					}
+				} else {
+					numsPeriod, invalidDatePeriods := prepareDateInterval(value)
+					if len(invalidDatePeriods) > 0 {
+						for _, invalid := range invalidDatePeriods {
+							invalidPeriods = append(invalidPeriods, invalid)
+						}
+					} else {
+						if len(numsPeriod) == 1 {
+							wheres = append(wheres, "DATE(`created`) = DATE('"+numsPeriod[0]+"')")
+						}
+
+						if len(numsPeriod) == 2 {
+							wheres = append(wheres, "DATE(`created`) >= DATE('"+numsPeriod[0]+"' AND DATE(`created`) <= DATE('"+numsPeriod[1]+"')")
+						}
+					}
+				}
+			}
+
+			/** TODO */
+			findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
+			for _, where := range wheres {
+				//Поиск упражнения в БД
+
+				if err != nil {
+					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+					continue
+				}
+			}
+
+			log.Printf("Message info: %v \n", wheres)
+			log.Printf("Message info: %v \n", invalidPeriods)
+
+			continue
+			if len(input) < 3 {
+				sendMessage(bot, update, "Введи корректно что именно показать и период.")
+				continue
+			}
+
+			_, isValidTraining := checkIsText(input[1])
+
+			//Проверка указанного упражнения в сообщении на валидность
+			if !isValidTraining {
+				sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
+				continue
+			}
+
+			if input[2] == "за" {
+				input = deleteElemFromSlice(input, 2)
+			}
+
 			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
-		case "покажи":
+		case "удали":
 			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
 		case "help", "помоги", "помощь":
 			sendMessage(
@@ -248,9 +331,13 @@ func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
 	bot.Send(msg)
 }
 
-func prepareInput(inputText string) []string {
+func prepareInput(inputText string, separator string) []string {
 	needle := regexp.MustCompile(`[[:punct:]]`)
-	return strings.Split(needle.ReplaceAllString(strings.ToLower(inputText), ""), " ")
+	replacePuncts := needle.ReplaceAllString(strings.ToLower(inputText), "")
+	replaceSpaces := regexp.MustCompile("\\s+")
+	replace := replaceSpaces.ReplaceAllString(strings.TrimSpace(replacePuncts), " ")
+
+	return strings.Split(replace, separator)
 }
 
 func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool {
@@ -270,4 +357,57 @@ func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool
 // Удалить элемент по индексу из слайса.
 func deleteElemFromSlice(slice []string, index int) []string {
 	return append(slice[:index], slice[index+1:]...)
+}
+
+func prepareDateInterval(interval string) ([]string, []string) {
+	replaceSpaces := regexp.MustCompile("\\s+")
+	replace := replaceSpaces.ReplaceAllString(strings.TrimSpace(interval), " ")
+	intervals := strings.Split(replace, " ")
+	var result []string
+	var invalidPeriods []string
+
+	if len(intervals) == 1 {
+		formattedInterval, err := getDateFromNums(intervals[0])
+		if err != nil {
+			invalidPeriods = append(invalidPeriods, intervals[0])
+		}
+
+		return append(result, formattedInterval), invalidPeriods
+	}
+
+	if len(intervals) == 2 {
+		formattedIntervalBegin, errBegin := getDateFromNums(intervals[0])
+		formattedIntervalEnd, errEnd := getDateFromNums(intervals[1])
+
+		if errBegin != nil {
+			invalidPeriods = append(invalidPeriods, intervals[0])
+		}
+
+		if errEnd != nil {
+			invalidPeriods = append(invalidPeriods, intervals[1])
+		}
+
+		if formattedIntervalBegin > formattedIntervalEnd {
+			formattedIntervalBegin, formattedIntervalEnd = formattedIntervalEnd, formattedIntervalBegin
+		}
+
+		result = append(result, formattedIntervalBegin)
+		return append(result, formattedIntervalEnd), invalidPeriods
+	}
+
+	invalidPeriods = append(invalidPeriods, "all")
+
+	return result, invalidPeriods
+}
+
+func getDateFromNums(nums string) (string, error) {
+	parse, err := time.Parse("02012006", nums)
+	if err != nil {
+		parse, err = time.Parse("020106", nums)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return parse.Format("2006-01-02"), nil
 }
