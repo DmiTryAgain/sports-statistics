@@ -32,6 +32,11 @@ type Training struct {
 	Alias, Name string
 }
 
+type ResultStatistic struct {
+	train       string
+	total, sets int
+}
+
 // init is invoked before main()
 func init() {
 	if err := godotenv.Load(".env", "docker\\.env"); err != nil {
@@ -53,8 +58,8 @@ func main() {
 
 	conditionsByPeriod := map[string]string{
 		"сегодня":   "YEAR(`created`) = YEAR(NOW()) AND WEEK(`created`, 1) = WEEK(NOW(), 1) AND DAY(`created`) = DAY(NOW())",
-		"вчера":     "WHERE MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -1 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -1 DAY))",
-		"позавчера": "WHERE MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -2 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -2 DAY))",
+		"вчера":     "MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -1 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -1 DAY))",
+		"позавчера": "MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -2 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -2 DAY))",
 		"неделю":    "YEAR(`created`) = YEAR(NOW()) AND WEEK(`created`, 1) = WEEK(NOW(), 1)",
 		"месяц":     "MONTH(`created`) = MONTH(NOW()) AND YEAR(`created`) = YEAR(NOW())",
 		"год":       "YEAR(`created`) = YEAR(NOW())",
@@ -136,7 +141,7 @@ func main() {
 			}
 
 			//Поиск упражнения в БД
-			findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
+			findTrain, err := db.Query("SELECT * from `training` where `Name` = ? LIMIT 1", training)
 
 			if err != nil {
 				sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
@@ -167,12 +172,10 @@ func main() {
 			}
 
 			insert, err := db.Query(
-				fmt.Sprintf(
-					"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES('%d', '%d', '%d')",
-					update.Message.From.ID,
-					train.Id,
-					count,
-				),
+				"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES(?, ?, ?)",
+				update.Message.From.ID,
+				train.Id,
+				count,
 			)
 
 			insert.Close()
@@ -194,10 +197,22 @@ func main() {
 				continue
 			}
 
-			/** TODO */
 			inputTrainings := deleteElemFromSlice(prepareInput(inputByPeriod[0], " "), 0)
+
+			inputTrainingsVoidInterfaceSlice := make([]any, len(inputTrainings))
+
+			for i, training := range inputTrainings {
+				inputTrainingsVoidInterfaceSlice[i] = training
+			}
+
+			//var whereTrainings []string
+			//
+			//for _, value := range inputTrainings {
+			//	whereTrainings = append(whereTrainings, "t.name = '"+value+"'")
+			//}
+
 			periods := deleteElemFromSlice(inputByPeriod, 0)
-			var wheres []string
+			var wherePeriods []string
 			var invalidPeriods []string
 
 			for _, value := range periods {
@@ -205,7 +220,7 @@ func main() {
 
 				if isValidText {
 					if conditionsByPeriod[value] != "" {
-						wheres = append(wheres, conditionsByPeriod[value])
+						wherePeriods = append(wherePeriods, conditionsByPeriod[value])
 					} else {
 						invalidPeriods = append(invalidPeriods, value)
 					}
@@ -217,49 +232,67 @@ func main() {
 						}
 					} else {
 						if len(numsPeriod) == 1 {
-							wheres = append(wheres, "DATE(`created`) = DATE('"+numsPeriod[0]+"')")
+							wherePeriods = append(wherePeriods, "DATE(`created`) = DATE('"+numsPeriod[0]+"')")
 						}
 
 						if len(numsPeriod) == 2 {
-							wheres = append(wheres, "DATE(`created`) >= DATE('"+numsPeriod[0]+"' AND DATE(`created`) <= DATE('"+numsPeriod[1]+"')")
+							wherePeriods = append(wherePeriods, "DATE(`created`) >= DATE('"+numsPeriod[0]+"') AND DATE(`created`) <= DATE('"+numsPeriod[1]+"')")
 						}
 					}
 				}
 			}
 
-			/** TODO */
-			findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
-			for _, where := range wheres {
-				//Поиск упражнения в БД
+			periodsSQL := strings.Join(wherePeriods, " OR ")
+			log.Printf("Message info: %v \n", inputTrainings)
+			log.Printf("Message info: %v \n", periodsSQL)
+			query := `
+				SELECT t.name as train, sum(count) as total, count(count) as sets 
+				FROM statistic 
+				JOIN training t on t.id = statistic.training_id 
+				WHERE telegram_user_id = ? 
+				AND ` + periodsSQL + ` 
+ 				AND t.name in (?` + strings.Repeat(",?", len(inputTrainings)-1) + `)
+				GROUP BY training_id;
+			`
+			fmt.Println(query)
+
+			result, err := db.Query(
+				query,
+				append(append([]any{}, update.Message.From.ID), inputTrainingsVoidInterfaceSlice...)...,
+			)
+
+			log.Printf("Message info:  %v \n", result)
+			if err != nil {
+				sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+				continue
+			}
+
+			var results []ResultStatistic
+			for result.Next() {
+				var resultStruct ResultStatistic
+				err = result.Scan(&resultStruct.train, &resultStruct.total, &resultStruct.sets)
 
 				if err != nil {
 					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					continue
 				}
+
+				results = append(results, resultStruct)
 			}
 
-			log.Printf("Message info: %v \n", wheres)
-			log.Printf("Message info: %v \n", invalidPeriods)
+			if len(results) == 0 {
+				sendMessage(bot, update, "К сожалению по вашему запросу результаты не найдены. "+
+					"Попробуйте указать другие упражнения и период.")
+			} else {
+				resultMessage := "Вы сделали:\n"
 
-			continue
-			if len(input) < 3 {
-				sendMessage(bot, update, "Введи корректно что именно показать и период.")
-				continue
+				for _, result := range results {
+					resultMessage += fmt.Sprintf("%v в количестве %v раз, за %v подхода(ов).", result.train, result.total, result.sets)
+				}
+
+				sendMessage(bot, update, resultMessage)
 			}
 
-			_, isValidTraining := checkIsText(input[1])
-
-			//Проверка указанного упражнения в сообщении на валидность
-			if !isValidTraining {
-				sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
-				continue
-			}
-
-			if input[2] == "за" {
-				input = deleteElemFromSlice(input, 2)
-			}
-
-			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
+			result.Close()
 		case "удали":
 			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
 		case "help", "помоги", "помощь":
