@@ -205,12 +205,6 @@ func main() {
 				inputTrainingsVoidInterfaceSlice[i] = training
 			}
 
-			//var whereTrainings []string
-			//
-			//for _, value := range inputTrainings {
-			//	whereTrainings = append(whereTrainings, "t.name = '"+value+"'")
-			//}
-
 			periods := deleteElemFromSlice(inputByPeriod, 0)
 			var wherePeriods []string
 			var invalidPeriods []string
@@ -254,7 +248,7 @@ func main() {
  				AND t.name in (?` + strings.Repeat(",?", len(inputTrainings)-1) + `)
 				GROUP BY training_id;
 			`
-			fmt.Println(query)
+			//fmt.Println(query)
 
 			result, err := db.Query(
 				query,
