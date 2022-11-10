@@ -48,11 +48,6 @@ func init() {
 func main() {
 	var token, _ = os.LookupEnv(TOKEN)
 	var botName, _ = os.LookupEnv(BOT_NAME)
-	//var dbUser, _ = os.LookupEnv(DB_USERNAME)
-	//var dbPass, _ = os.LookupEnv(DB_PASSWORD)
-	//var dbName, _ = os.LookupEnv(DB_DATABASE)
-	//var dbCharset, _ = os.LookupEnv(DB_CHARSET)
-	//var dbHost, _ = os.LookupEnv(DB_HOST)
 	var dbDsn, _ = os.LookupEnv(DB_DSN)
 	var dbType, _ = os.LookupEnv(DB_TYPE)
 
@@ -274,8 +269,12 @@ func main() {
 			}
 
 			if len(results) == 0 {
-				sendMessage(bot, update, "К сожалению по вашему запросу результаты не найдены. "+
-					"Попробуйте указать другие упражнения и период.")
+				sendMessage(
+					bot,
+					update,
+					"К сожалению по вашему запросу результаты не найдены. "+
+						"Попробуйте указать другие упражнения и период.",
+				)
 			} else {
 				resultMessage := "Вы сделали:\n"
 
