@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const TOKEN = "TELEGRAM_BOT_TOKEN"
@@ -31,6 +32,11 @@ type Training struct {
 	Alias, Name string
 }
 
+type ResultStatistic struct {
+	train       string
+	total, sets int
+}
+
 // init is invoked before main()
 func init() {
 	if err := godotenv.Load(".env", "docker\\.env"); err != nil {
@@ -42,13 +48,17 @@ func init() {
 func main() {
 	var token, _ = os.LookupEnv(TOKEN)
 	var botName, _ = os.LookupEnv(BOT_NAME)
-	//var dbUser, _ = os.LookupEnv(DB_USERNAME)
-	//var dbPass, _ = os.LookupEnv(DB_PASSWORD)
-	//var dbName, _ = os.LookupEnv(DB_DATABASE)
-	//var dbCharset, _ = os.LookupEnv(DB_CHARSET)
-	//var dbHost, _ = os.LookupEnv(DB_HOST)
 	var dbDsn, _ = os.LookupEnv(DB_DSN)
 	var dbType, _ = os.LookupEnv(DB_TYPE)
+
+	conditionsByPeriod := map[string]string{
+		"сегодня":   "YEAR(`created`) = YEAR(NOW()) AND WEEK(`created`, 1) = WEEK(NOW(), 1) AND DAY(`created`) = DAY(NOW())",
+		"вчера":     "MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -1 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -1 DAY))",
+		"позавчера": "MONTH(`created`) = MONTH(DATE_ADD(NOW(), INTERVAL -2 DAY)) and YEAR(`created`) = YEAR(DATE_ADD(NOW(), INTERVAL -2 DAY))",
+		"неделю":    "YEAR(`created`) = YEAR(NOW()) AND WEEK(`created`, 1) = WEEK(NOW(), 1)",
+		"месяц":     "MONTH(`created`) = MONTH(NOW()) AND YEAR(`created`) = YEAR(NOW())",
+		"год":       "YEAR(`created`) = YEAR(NOW())",
+	}
 
 	bot := createBot(token)
 
@@ -60,118 +70,253 @@ func main() {
 	updates, _ := bot.GetUpdatesChan(u)
 
 	for update := range updates {
-		if update.Message != nil { // If we got a message
-			//log.Printf("[%s] %s", update.Message.Chat.Type, update.Message.Text)
-			input := prepareInput(update.Message.Text)
-			lowerBotName := strings.ToLower(botName)
+		input := prepareInput(update.Message.Text, " ")
+		lowerBotName := strings.ToLower(botName)
 
-			if !checkBotCall(update, input[0], lowerBotName) && update.Message.Chat.Type == CHAT_TYPE_GROUP {
-				continue
-			} else if checkBotCall(update, input[0], lowerBotName) {
-				input = deleteElemFromSlice(input, 0)
+		if !checkBotCall(update, input[0], lowerBotName) && update.Message.Chat.Type == CHAT_TYPE_GROUP {
+			continue
+		} else if checkBotCall(update, input[0], lowerBotName) {
+			input = deleteElemFromSlice(input, 0)
 
-				if len(input) == 0 {
-					sendMessage(bot, update, "Чё?")
-					continue
-				}
-			}
-
-			command, isValidCommand := checkIsText(input[0])
-
-			//Проверка команды в сообщении на валидность
-			if !isValidCommand {
-				sendMessage(bot, update, "Команда содержит недопустимые символы.")
+			if len(input) == 0 {
+				sendMessage(bot, update, "Чё?")
 				continue
 			}
+		}
 
-			db, err := sql.Open(dbType, dbDsn)
+		log.Printf("Message info: \n"+
+			"UserName: %s\n"+
+			"ChatId: %d\n"+
+			"ChatType: %s\n"+
+			"Message: %s\n"+
+			"UserId: %d\n",
+			update.Message.Chat.UserName,
+			update.Message.Chat.ID,
+			update.Message.Chat.Type,
+			update.Message.Text,
+			update.Message.From.ID,
+		)
+
+		command, isValidCommand := checkIsText(input[0])
+
+		//Проверка команды в сообщении на валидность
+		if !isValidCommand {
+			sendMessage(bot, update, "Команда содержит недопустимые символы.")
+			continue
+		}
+
+		db, err := sql.Open(dbType, dbDsn)
+
+		if err != nil {
+			sendMessage(bot, update, fmt.Sprintf("Ошибка подключения к базе данных: %d ", err))
+		}
+
+		switch command {
+		case "сделал":
+
+			if len(input) < 3 {
+				sendMessage(bot, update, "Введи корректное наименование упражнения и число повторений.")
+				continue
+			}
+
+			training, isValidTraining := checkIsText(input[1])
+
+			//Проверка указанного упражнения в сообщении на валидность
+			if !isValidTraining {
+				sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
+				continue
+			}
+
+			count, isValidCount := checkIsInt(input[2])
+
+			//Проверка указанного количества в сообщении на валидность
+			if !isValidCount {
+				sendMessage(bot, update, "Указанное количество содержит некорректные символы.")
+				continue
+			}
+
+			//Поиск упражнения в БД
+			findTrain, err := db.Query("SELECT * from `training` where `Name` = ? LIMIT 1", training)
 
 			if err != nil {
-				sendMessage(bot, update, fmt.Sprintf("Ошибка подключения к базе данных: %d ", err))
+				sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+				continue
 			}
 
-			switch command {
-			case "сделал":
+			var trainings []Training
+			var train Training
 
-				if len(input) < 3 {
-					sendMessage(bot, update, "Введи корректное наименование упражнения и число повторений.")
-					continue
+			for findTrain.Next() {
+				err = findTrain.Scan(&train.Id, &train.Alias, &train.Name)
+				if err != nil {
+					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
 				}
 
-				training, isValidTraining := checkIsText(input[1])
+				trainings = append(trainings, train)
+			}
 
-				//Проверка указанного упражнения в сообщении на валидность
-				if !isValidTraining {
-					sendMessage(bot, update, "Указанное упражнение содержит некорректные символы.")
-					continue
-				}
-
-				count, isValidCount := checkIsInt(input[2])
-
-				//Проверка указанного количества в сообщении на валидность
-				if !isValidCount {
-					sendMessage(bot, update, "Указанное количество содержит некорректные символы.")
-					continue
-				}
-
-				//Поиск упражнения в БД
-				findTrain, err := db.Query(fmt.Sprintf("SELECT * from `training` where `Name` = '%s' LIMIT 1", training))
+			if train.Id == 0 {
+				sendMessage(bot, update, fmt.Sprintf("Упражнение \"%s\" не найдено.", training))
+				err := findTrain.Close()
 
 				if err != nil {
 					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					continue
 				}
 
-				var trainings []Training
-				var train Training
-
-				for findTrain.Next() {
-					err = findTrain.Scan(&train.Id, &train.Alias, &train.Name)
-					if err != nil {
-						sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					}
-
-					trainings = append(trainings, train)
-				}
-
-				if train.Id == 0 {
-					sendMessage(bot, update, fmt.Sprintf("Упражнение \"%s\" не найдено.", training))
-					err := findTrain.Close()
-
-					if err != nil {
-						sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-					}
-
-					continue
-				}
-
-				insert, err := db.Query(
-					fmt.Sprintf(
-						"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES('%d', '%d', '%d')",
-						update.Message.From.ID,
-						train.Id,
-						count,
-					),
-				)
-
-				defer insert.Close()
-
-				if err != nil {
-					panic(err)
-				}
-
-				defer findTrain.Close()
-
-				sendMessage(bot, update, fmt.Sprintf("Добавлено %s %d ", training, count))
-
-			case "удали":
-			case "покажи":
-			default:
-				sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" не найдена.", command))
+				continue
 			}
 
-			defer db.Close()
+			insert, err := db.Query(
+				"INSERT INTO `statistic` (`telegram_user_id`, `training_id`, `count`) VALUES(?, ?, ?)",
+				update.Message.From.ID,
+				train.Id,
+				count,
+			)
+
+			insert.Close()
+
+			if err != nil {
+				panic(err)
+			}
+
+			findTrain.Close()
+
+			sendMessage(bot, update, fmt.Sprintf("Добавлено %s %d ", training, count))
+
+		case "покажи", "выведи":
+
+			inputByPeriod := prepareInput(update.Message.Text, " за ")
+
+			if len(inputByPeriod) < 2 {
+				sendMessage(bot, update, "Введи корректно что именно показать и период.")
+				continue
+			}
+
+			inputTrainings := deleteElemFromSlice(prepareInput(inputByPeriod[0], " "), 0)
+
+			inputTrainingsVoidInterfaceSlice := make([]any, len(inputTrainings))
+
+			for i, training := range inputTrainings {
+				inputTrainingsVoidInterfaceSlice[i] = training
+			}
+
+			periods := deleteElemFromSlice(inputByPeriod, 0)
+			var wherePeriods []string
+			var invalidPeriods []string
+
+			for _, value := range periods {
+				_, isValidText := checkIsText(value)
+
+				if isValidText {
+					if conditionsByPeriod[value] != "" {
+						wherePeriods = append(wherePeriods, conditionsByPeriod[value])
+					} else {
+						invalidPeriods = append(invalidPeriods, value)
+					}
+				} else {
+					numsPeriod, invalidDatePeriods := prepareDateInterval(value)
+					if len(invalidDatePeriods) > 0 {
+						for _, invalid := range invalidDatePeriods {
+							invalidPeriods = append(invalidPeriods, invalid)
+						}
+					} else {
+						if len(numsPeriod) == 1 {
+							wherePeriods = append(wherePeriods, "DATE(`created`) = DATE('"+numsPeriod[0]+"')")
+						}
+
+						if len(numsPeriod) == 2 {
+							wherePeriods = append(wherePeriods, "DATE(`created`) >= DATE('"+numsPeriod[0]+"') AND DATE(`created`) <= DATE('"+numsPeriod[1]+"')")
+						}
+					}
+				}
+			}
+
+			periodsSQL := strings.Join(wherePeriods, " OR ")
+			log.Printf("Message info: %v \n", inputTrainings)
+			log.Printf("Message info: %v \n", periodsSQL)
+			query := `
+				SELECT t.name as train, sum(count) as total, count(count) as sets 
+				FROM statistic 
+				JOIN training t on t.id = statistic.training_id 
+				WHERE telegram_user_id = ? 
+				AND ` + periodsSQL + ` 
+ 				AND t.name in (?` + strings.Repeat(",?", len(inputTrainings)-1) + `)
+				GROUP BY training_id;
+			`
+			//fmt.Println(query)
+
+			result, err := db.Query(
+				query,
+				append(append([]any{}, update.Message.From.ID), inputTrainingsVoidInterfaceSlice...)...,
+			)
+
+			log.Printf("Message info:  %v \n", result)
+			if err != nil {
+				sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+				continue
+			}
+
+			var results []ResultStatistic
+			for result.Next() {
+				var resultStruct ResultStatistic
+				err = result.Scan(&resultStruct.train, &resultStruct.total, &resultStruct.sets)
+
+				if err != nil {
+					sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
+				}
+
+				results = append(results, resultStruct)
+			}
+
+			if len(results) == 0 {
+				sendMessage(
+					bot,
+					update,
+					"К сожалению по вашему запросу результаты не найдены. "+
+						"Попробуйте указать другие упражнения и период.",
+				)
+			} else {
+				resultMessage := "Вы сделали:\n"
+
+				for _, result := range results {
+					resultMessage += fmt.Sprintf("%v в количестве %v раз, за %v подхода(ов).", result.train, result.total, result.sets)
+				}
+
+				sendMessage(bot, update, resultMessage)
+			}
+
+			result.Close()
+		case "удали":
+			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" в разработке.", command))
+		case "help", "помоги", "помощь":
+			sendMessage(
+				bot,
+				update,
+				fmt.Sprintf(
+					"Привет! Я - бот, который поможет вести статистику спортивных упражнений, которые "+
+						"ты выполняешь. Ты же ведь занимаешься спортом, верно?🤔\n"+
+						"Так вот, чтоб было удобно вести учёт и смотреть статистику, ты можешь это делать "+
+						"с помощью команд ко мне.\n"+
+						"Я слушаю команды, когда ко мне обращаются. обратись ко мне вот так: `@%s`\n"+
+						"Исключением является личная переписка. Если ты напишешь мне в личку, я буду реагировать на "+
+						"любые твои сообщения. Но и в личных сообщениях поддерживается обращение, "+
+						"если уж сильно хочется)\n"+
+						"После обращения через пробел нужно написать команду и передать к ней данные, "+
+						"чтобы записать/показать результаты."+
+						"Список поддерживаемых команд: \n"+
+						"Чтобы записать результаты, воспользуйтесь командой ``, напишите название упражнения и "+
+						"количество повторений, которое сделали. Все слова отделяйте пробелом.\n"+
+						"Например, Вы сделали подход из 10 подтягиваний. Чтобы я всё корректно записал, напишите в "+
+						"чат: `@%s сделал подтягивание 10`",
+					botName,
+					botName,
+				),
+			)
+		default:
+			sendMessage(bot, update, fmt.Sprintf("Команда \"%s\" не найдена.", command))
 		}
+
+		db.Close()
 	}
 }
 
@@ -206,14 +351,19 @@ func checkIsInt(count string) (int, bool) {
 
 func sendMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update, message string) {
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, message)
+	msg.ParseMode = "markdown"
 	msg.ReplyToMessageID = update.Message.MessageID
 
 	bot.Send(msg)
 }
 
-func prepareInput(inputText string) []string {
+func prepareInput(inputText string, separator string) []string {
 	needle := regexp.MustCompile(`[[:punct:]]`)
-	return strings.Split(needle.ReplaceAllString(strings.ToLower(inputText), ""), " ")
+	replacePuncts := needle.ReplaceAllString(strings.ToLower(inputText), "")
+	replaceSpaces := regexp.MustCompile("\\s+")
+	replace := replaceSpaces.ReplaceAllString(strings.TrimSpace(replacePuncts), " ")
+
+	return strings.Split(replace, separator)
 }
 
 func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool {
@@ -233,4 +383,57 @@ func checkBotCall(update tgbotapi.Update, firstWord string, botName string) bool
 // Удалить элемент по индексу из слайса.
 func deleteElemFromSlice(slice []string, index int) []string {
 	return append(slice[:index], slice[index+1:]...)
+}
+
+func prepareDateInterval(interval string) ([]string, []string) {
+	replaceSpaces := regexp.MustCompile("\\s+")
+	replace := replaceSpaces.ReplaceAllString(strings.TrimSpace(interval), " ")
+	intervals := strings.Split(replace, " ")
+	var result []string
+	var invalidPeriods []string
+
+	if len(intervals) == 1 {
+		formattedInterval, err := getDateFromNums(intervals[0])
+		if err != nil {
+			invalidPeriods = append(invalidPeriods, intervals[0])
+		}
+
+		return append(result, formattedInterval), invalidPeriods
+	}
+
+	if len(intervals) == 2 {
+		formattedIntervalBegin, errBegin := getDateFromNums(intervals[0])
+		formattedIntervalEnd, errEnd := getDateFromNums(intervals[1])
+
+		if errBegin != nil {
+			invalidPeriods = append(invalidPeriods, intervals[0])
+		}
+
+		if errEnd != nil {
+			invalidPeriods = append(invalidPeriods, intervals[1])
+		}
+
+		if formattedIntervalBegin > formattedIntervalEnd {
+			formattedIntervalBegin, formattedIntervalEnd = formattedIntervalEnd, formattedIntervalBegin
+		}
+
+		result = append(result, formattedIntervalBegin)
+		return append(result, formattedIntervalEnd), invalidPeriods
+	}
+
+	invalidPeriods = append(invalidPeriods, "all")
+
+	return result, invalidPeriods
+}
+
+func getDateFromNums(nums string) (string, error) {
+	parse, err := time.Parse("02012006", nums)
+	if err != nil {
+		parse, err = time.Parse("020106", nums)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return parse.Format("2006-01-02"), nil
 }
