@@ -119,9 +119,14 @@ func (m *MessageHandler) handleAddCommand(words []string, dto *Dto) (string, boo
 	}
 
 	statisticRepository.AddStatistic(
-		trainingEntity.GetId(),
-		new(statistic.Count).Construct(countInt),
-		new(user.Id).Construct(dto.GetUserId()),
+		new(statistic.Statistic).Construct(
+			nil,
+			trainingEntity,
+			new(statistic.User).Construct(new(user.Id).Construct(countInt)),
+			nil,
+			new(statistic.Count).Construct(countInt),
+			nil,
+		),
 	)
 
 	if statisticRepository.GetError() != nil {

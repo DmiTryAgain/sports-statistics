@@ -5,8 +5,6 @@ import (
 	"sports-statistics/internal/app"
 	ms "sports-statistics/internal/models/statistic"
 	statisticEntity "sports-statistics/internal/service/entity/statistic"
-	trainingEntity "sports-statistics/internal/service/entity/training"
-	"sports-statistics/internal/service/entity/user"
 	"sports-statistics/internal/service/repository/statistic"
 )
 
@@ -30,16 +28,16 @@ func (r *Repository) GetError() error {
 	return r.err
 }
 
-func (r *Repository) AddStatistic(trainingId *trainingEntity.Id, count *statisticEntity.Count, userId *user.Id) {
+func (r *Repository) AddStatistic(statistic *statisticEntity.Statistic) {
 	insert, err := r.db.Query(
 		"INSERT INTO `?` (`?`, `?`, `?`) VALUES(?, ?, ?)",
 		r.model.GetTableName(),
 		r.model.GetTelegramUserIdColumnName(),
 		r.model.GetTrainingIdColumnName(),
 		r.model.GetCountColumnName(),
-		userId.GetValue(),
-		trainingId.GetValue(),
-		count.GetValue(),
+		statistic.GetUser().GetId().GetValue(),
+		statistic.GetTraining().GetId().GetValue(),
+		statistic.GetCount().GetValue(),
 	)
 
 	if err != nil {
@@ -53,6 +51,6 @@ func (r *Repository) AddStatistic(trainingId *trainingEntity.Id, count *statisti
 	}
 }
 
-func (r *Repository) GetByConditions(trainings []any, periods []string) []statisticEntity.Statistic {
+func (r *Repository) GetByConditions(trainings []any, periods []string) []*statisticEntity.Statistic {
 
 }
