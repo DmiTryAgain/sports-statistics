@@ -11,7 +11,7 @@ func Handle(updates *tgbotapi.UpdatesChannel) {
 	for update := range *updates {
 		messageDto := createMessageDto(&update)
 		go logUpdates(new(logger.ConsoleLogger), messageDto)
-		go handleMessage(new(message_handler.MessageHandler), messageDto)
+		go handleMessage(new(message_handler.MessageHandler).Construct(), messageDto)
 	}
 }
 

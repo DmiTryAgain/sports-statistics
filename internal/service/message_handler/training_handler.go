@@ -7,6 +7,8 @@ import (
 	cr "sports-statistics/internal/repositiry/command_repository"
 	sr "sports-statistics/internal/repositiry/db/statistic"
 	tr "sports-statistics/internal/repositiry/db/training"
+	"sports-statistics/internal/service/entity/statistic"
+	"sports-statistics/internal/service/entity/user"
 	"sports-statistics/internal/service/helpers"
 	"strconv"
 	"strings"
@@ -16,29 +18,37 @@ import (
 const chatTypeGroup = "group"
 const dbErrorMessage = "Произошла ошибка БД!"
 
-type MessageHandler struct{}
+type MessageHandler struct {
+	validator   TrainingValidatorInterface
+	sliceHelper *helpers.SliceHelper
+}
 
-func (m MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
-	validator := new(TrainingValidator)
-	sliceHelper := new(helpers.SliceHelper)
-	firstSliceIndex := sliceHelper.FirstSliceElemIndex()
-	wordsFromMessText := sliceHelper.SplitStringToSlice(dto.GetText(), " ")
+func (m *MessageHandler) Construct() Handler {
+	m.validator = new(TrainingValidator)
+	m.sliceHelper = new(helpers.SliceHelper)
+
+	return m
+}
+
+func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
+	firstSliceIndex := m.sliceHelper.FirstSliceElemIndex()
+	wordsFromMessText := m.sliceHelper.SplitStringToSlice(dto.GetText(), " ")
 	lowerBotName := strings.ToLower(app.Config.GetBotName())
-	isBotCalled := validator.CheckBotCall(dto.GetTextEntities(), wordsFromMessText[firstSliceIndex], lowerBotName)
+	isBotCalled := m.validator.CheckBotCall(dto.GetTextEntities(), wordsFromMessText[firstSliceIndex], lowerBotName)
 
 	if !isBotCalled && dto.GetChatType() == chatTypeGroup {
 		return "", false, nil
 	} else if isBotCalled {
-		wordsFromMessText = sliceHelper.DeleteElemFromSlice(wordsFromMessText, firstSliceIndex)
+		wordsFromMessText = m.sliceHelper.DeleteElemFromSlice(wordsFromMessText, firstSliceIndex)
 	}
 
-	if validator.IsEmptyMessage(wordsFromMessText) {
+	if m.validator.IsEmptyMessage(wordsFromMessText) {
 		//sendMessage(bot, update, )
 		return "Чё?", true, nil
 	}
 
 	command := wordsFromMessText[firstSliceIndex]
-	commandIsValid, err := validator.CheckIsOnlyRussianText(command)
+	commandIsValid, err := m.validator.CheckIsOnlyRussianText(command)
 
 	if err != nil {
 		return "Произошла ошибка при проверке команды на валидность!", true, err
@@ -61,18 +71,14 @@ func (m MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 	}
 }
 
-func (m MessageHandler) handleAddCommand(words []string, dto *Dto) (string, bool, error) {
-	/** TODO: чё-то сделать с этой ерундой. Скорее всего повыносить в свойства */
-	validator := new(TrainingValidator)
-	sliceHelper := new(helpers.SliceHelper)
-
-	if !validator.CheckMinCorrectLen(words) {
+func (m *MessageHandler) handleAddCommand(words []string, dto *Dto) (string, bool, error) {
+	if !m.validator.CheckMinCorrectLen(words) {
 		return "Введи корректное наименование упражнения и число повторений.", true, nil
 	}
 
-	training := words[sliceHelper.FirstSliceElemIndex()]
+	training := words[m.sliceHelper.FirstSliceElemIndex()]
 
-	trainingIsValid, err := validator.CheckIsOnlyRussianText(training)
+	trainingIsValid, err := m.validator.CheckIsOnlyRussianText(training)
 
 	if err != nil {
 		return "Произошла ошибка при проверке упражнения на валидность!", true, err
@@ -82,9 +88,9 @@ func (m MessageHandler) handleAddCommand(words []string, dto *Dto) (string, bool
 		return "Указанное упражнение должно состоять только из русских букв.", true, nil
 	}
 
-	count := words[sliceHelper.SecondSliceElemIndex()]
+	count := words[m.sliceHelper.SecondSliceElemIndex()]
 
-	isValidCount, err := validator.CheckIsOnlyInt(count)
+	isValidCount, err := m.validator.CheckIsOnlyInt(count)
 
 	if err != nil {
 		return "Произошла ошибка при проверке количества повторений на валидность!", true, err
@@ -106,13 +112,17 @@ func (m MessageHandler) handleAddCommand(words []string, dto *Dto) (string, bool
 	defer statisticRepository.Destruct()
 	defer trainingRepository.Destruct()
 
-	trainingModel := trainingRepository.GetTrainingByName(training)
+	trainingEntity := trainingRepository.GetTrainingByName(training)
 
 	if trainingRepository.GetError() != nil {
 		return dbErrorMessage, true, err
 	}
 
-	statisticRepository.AddStatistic(trainingModel.Id, countInt, dto.GetUserId())
+	statisticRepository.AddStatistic(
+		trainingEntity.GetId(),
+		new(statistic.Count).Construct(countInt),
+		new(user.Id).Construct(dto.GetUserId()),
+	)
 
 	if statisticRepository.GetError() != nil {
 		return dbErrorMessage, true, err
@@ -121,29 +131,26 @@ func (m MessageHandler) handleAddCommand(words []string, dto *Dto) (string, bool
 	return fmt.Sprintf("Добавлено %s %d ", training, countInt), true, nil
 }
 
-func (m MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
-	validator := new(TrainingValidator)
-	sliceHelper := new(helpers.SliceHelper)
+func (m *MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
+	inputByPeriod := m.sliceHelper.SplitStringToSlice(dto.GetText(), " за ")
 
-	inputByPeriod := sliceHelper.SplitStringToSlice(dto.GetText(), " за ")
-
-	if !validator.CheckMinCorrectLenForPeriods(inputByPeriod) {
+	if !m.validator.CheckMinCorrectLenForPeriods(inputByPeriod) {
 		return "Введи корректно что именно показать и период.", true, nil
 	}
 
-	firstSliceIndex := sliceHelper.FirstSliceElemIndex()
+	firstSliceIndex := m.sliceHelper.FirstSliceElemIndex()
 
-	inputTrainings := sliceHelper.DeleteElemFromSlice(
-		sliceHelper.SplitStringToSlice(
+	inputTrainings := m.sliceHelper.DeleteElemFromSlice(
+		m.sliceHelper.SplitStringToSlice(
 			inputByPeriod[firstSliceIndex],
 			" ",
 		),
 		firstSliceIndex,
 	)
 
-	inputTrainingsAnyElems := sliceHelper.ConvertFromStringToAnyElems(inputTrainings)
+	inputTrainingsAnyElems := m.sliceHelper.ConvertFromStringToAnyElems(inputTrainings)
 
-	periods := sliceHelper.DeleteElemFromSlice(inputByPeriod, firstSliceIndex)
+	periods := m.sliceHelper.DeleteElemFromSlice(inputByPeriod, firstSliceIndex)
 	statisticRepository := new(sr.Repository).Construct()
 
 	defer statisticRepository.Destruct()
@@ -154,7 +161,7 @@ func (m MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 	var invalidPeriods []string
 
 	for _, value := range periods {
-		isValidText, err := validator.CheckIsOnlyRussianText(value)
+		isValidText, err := m.validator.CheckIsOnlyRussianText(value)
 
 		if err != nil {
 			return "Произошла ошибка при проверке периода на валидность!", true, err
@@ -174,12 +181,12 @@ func (m MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 					invalidPeriods = append(invalidPeriods, invalid)
 				}
 			} else {
-				if len(numsPeriod) == 1 {
-					wherePeriods = append(wherePeriods, "DATE(`created`) = DATE('"+numsPeriod[0]+"')")
+				if m.sliceHelper.CheckLenSlice(numsPeriod, 1) {
+					wherePeriods = append(wherePeriods, "DATE(`created`) = DATE('"+numsPeriod[firstSliceIndex]+"')")
 				}
 
-				if len(numsPeriod) == 2 {
-					wherePeriods = append(wherePeriods, "DATE(`created`) >= DATE('"+numsPeriod[0]+"') AND DATE(`created`) <= DATE('"+numsPeriod[1]+"')")
+				if m.sliceHelper.CheckLenSlice(numsPeriod, 2) {
+					wherePeriods = append(wherePeriods, "DATE(`created`) >= DATE('"+numsPeriod[firstSliceIndex]+"') AND DATE(`created`) <= DATE('"+numsPeriod[m.sliceHelper.SecondSliceElemIndex()]+"')")
 				}
 			}
 		}
@@ -222,7 +229,7 @@ func (m MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 		results = append(results, resultStruct)
 	}
 
-	if len(results) == 0 {
+	if m.sliceHelper.IsEmptySlice(results) {
 		sendMessage(
 			bot,
 			update,
@@ -242,31 +249,32 @@ func (m MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 	result.Close()
 }
 
-func (m MessageHandler) prepareDateInterval(interval string) ([]string, []string) {
-	sliceHelper := new(helpers.SliceHelper)
-	intervals := sliceHelper.SplitStringDatesToSlice(interval)
+func (m *MessageHandler) prepareDateInterval(interval string) ([]string, []string) {
+	firstSliceIndex := m.sliceHelper.FirstSliceElemIndex()
+	secondSliceIndex := m.sliceHelper.SecondSliceElemIndex()
+	intervals := m.sliceHelper.SplitStringDatesToSlice(interval)
 	var result []string
 	var invalidPeriods []string
 
-	if len(intervals) == 1 {
-		formattedInterval, err := m.getDateFromNums(intervals[0])
+	if m.sliceHelper.CheckLenSlice(intervals, 1) {
+		formattedInterval, err := m.getDateFromNums(intervals[firstSliceIndex])
 		if err != nil {
-			invalidPeriods = append(invalidPeriods, intervals[0])
+			invalidPeriods = append(invalidPeriods, intervals[firstSliceIndex])
 		}
 
 		return append(result, formattedInterval), invalidPeriods
 	}
 
-	if len(intervals) == 2 {
-		formattedIntervalBegin, errBegin := m.getDateFromNums(intervals[0])
-		formattedIntervalEnd, errEnd := m.getDateFromNums(intervals[1])
+	if m.sliceHelper.CheckLenSlice(intervals, 2) {
+		formattedIntervalBegin, errBegin := m.getDateFromNums(intervals[firstSliceIndex])
+		formattedIntervalEnd, errEnd := m.getDateFromNums(intervals[secondSliceIndex])
 
 		if errBegin != nil {
-			invalidPeriods = append(invalidPeriods, intervals[0])
+			invalidPeriods = append(invalidPeriods, intervals[firstSliceIndex])
 		}
 
 		if errEnd != nil {
-			invalidPeriods = append(invalidPeriods, intervals[1])
+			invalidPeriods = append(invalidPeriods, intervals[secondSliceIndex])
 		}
 
 		if formattedIntervalBegin > formattedIntervalEnd {
@@ -282,7 +290,7 @@ func (m MessageHandler) prepareDateInterval(interval string) ([]string, []string
 	return result, invalidPeriods
 }
 
-func (m MessageHandler) getDateFromNums(nums string) (string, error) {
+func (m *MessageHandler) getDateFromNums(nums string) (string, error) {
 	parse, err := time.Parse("02012006", nums)
 	if err != nil {
 		parse, err = time.Parse("020106", nums)

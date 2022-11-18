@@ -1,5 +1,6 @@
 package message_handler
 
 type Handler interface {
-	HandleWithResponse(dto *Dto) (string, bool)
+	Construct() Handler
+	HandleWithResponse(dto *Dto) (string, bool, error)
 }
