@@ -1,9 +1,9 @@
 package message_handler
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+import tgBotApi "github.com/go-telegram-bot-api/telegram-bot-api"
 
 type TrainingValidatorInterface interface {
-	CheckBotCall(entities *[]tgbotapi.MessageEntity, firstWord string, botName string) bool
+	CheckBotCall(entities *[]tgBotApi.MessageEntity, firstWord string, botName string) bool
 	IsEmptyMessage(words []string) bool
 	CheckIsOnlyRussianText(str string) (bool, error)
 	CheckIsOnlyInt(count string) (bool, error)

@@ -7,14 +7,15 @@ import (
 
 const botName = "TELEGRAM_BOT_NAME"
 const token = "TELEGRAM_BOT_TOKEN"
+const replyFormat = "TELEGRAM_REPLY_FORMAT"
 const updsTimeout = 60
 
 const dbDsn = "DB_DSN"
 const dbType = "DB_TYPE"
 
 type Config struct {
-	name, secret, dsn, typeDb string
-	updsTimeout               int
+	name, secret, dsn, typeDb, replyFormat string
+	updsTimeout                            int
 }
 
 func (b *Config) Construct() *Config {
@@ -24,12 +25,14 @@ func (b *Config) Construct() *Config {
 
 	var token, _ = os.LookupEnv(token)
 	var name, _ = os.LookupEnv(botName)
+	var replyFormat, _ = os.LookupEnv(replyFormat)
 
 	var dbDsn, _ = os.LookupEnv(dbDsn)
 	var dbType, _ = os.LookupEnv(dbType)
 
 	b.name = name
 	b.secret = token
+	b.replyFormat = replyFormat
 	b.updsTimeout = updsTimeout
 
 	b.dsn = dbDsn
@@ -43,6 +46,10 @@ func (b *Config) GetBotName() string {
 }
 
 func (b *Config) GetBotSecret() string {
+	return b.secret
+}
+
+func (b *Config) GetReplyFormat() string {
 	return b.secret
 }
 

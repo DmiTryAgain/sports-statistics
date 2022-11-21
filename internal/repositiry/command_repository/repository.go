@@ -9,7 +9,7 @@ type CommandRepository struct {
 	addCommands, showCommands map[string]any
 }
 
-func (r *CommandRepository) Construct() command.CommandRepositoryInterface {
+func (r *CommandRepository) Construct() command.RepositoryInterface {
 	r.addCommands = map[string]any{
 		"сделал":   helpers.StructStub{},
 		"добавь":   helpers.StructStub{},

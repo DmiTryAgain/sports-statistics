@@ -1,7 +1,7 @@
 package message_handler
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgBotApi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"regexp"
 	"sports-statistics/internal/service/helpers"
 )
@@ -13,7 +13,7 @@ const minCorrectLenForPeriodsSlice = 2
 type TrainingValidator struct {
 }
 
-func (v TrainingValidator) CheckBotCall(entities *[]tgbotapi.MessageEntity, firstWord string, botName string) bool {
+func (v TrainingValidator) CheckBotCall(entities *[]tgBotApi.MessageEntity, firstWord string, botName string) bool {
 	if entities == nil {
 		return false
 	}

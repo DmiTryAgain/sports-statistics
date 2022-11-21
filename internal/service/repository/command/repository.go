@@ -1,7 +1,7 @@
 package command
 
-type CommandRepositoryInterface interface {
-	Construct() CommandRepositoryInterface
+type RepositoryInterface interface {
+	Construct() RepositoryInterface
 	GetAddCommands() map[string]any
 	GetShowCommands() map[string]any
 }

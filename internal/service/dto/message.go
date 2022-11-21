@@ -1,13 +1,16 @@
 package dto
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+import (
+	tgBotApi "github.com/go-telegram-bot-api/telegram-bot-api"
+	tgBotRequest "sports-statistics/internal/app/request"
+)
 
 type Dto struct {
-	upd *tgbotapi.Update
+	upd *tgBotApi.Update
 }
 
-func (d *Dto) Construct(upd *tgbotapi.Update) *Dto {
-	d.upd = upd
+func (d *Dto) Construct(request *tgBotRequest.Request) *Dto {
+	d.upd = request.GetUpdate()
 
 	return d
 }
@@ -32,6 +35,10 @@ func (d *Dto) GetText() string {
 	return d.upd.Message.Text
 }
 
-func (d *Dto) GetTextEntities() *[]tgbotapi.MessageEntity {
+func (d *Dto) GetTextEntities() *[]tgBotApi.MessageEntity {
 	return d.upd.Message.Entities
+}
+
+func (d *Dto) GetMessageId() int {
+	return d.upd.Message.MessageID
 }

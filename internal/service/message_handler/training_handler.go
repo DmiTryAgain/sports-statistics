@@ -2,11 +2,11 @@ package message_handler
 
 import (
 	"fmt"
-	"log"
 	"sports-statistics/internal/app"
 	cr "sports-statistics/internal/repositiry/command_repository"
 	sr "sports-statistics/internal/repositiry/db/statistic"
 	tr "sports-statistics/internal/repositiry/db/training"
+	"sports-statistics/internal/repositiry/periods_repository"
 	"sports-statistics/internal/service/entity/statistic"
 	"sports-statistics/internal/service/entity/user"
 	"sports-statistics/internal/service/helpers"
@@ -65,13 +65,15 @@ func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 
 	switch true {
 	case isAddCommand:
-		return m.handleAddCommand(wordsFromMessText, dto)
+		return m.handleAddCommand(wordsFromMessText)
 	case isShowCommand:
 		return m.handleShowCommand(dto)
 	}
+
+	return "Упс! Произошло некорректное поведение! Обратитесь за помощью к разработчику!", true, nil
 }
 
-func (m *MessageHandler) handleAddCommand(words []string, dto *Dto) (string, bool, error) {
+func (m *MessageHandler) handleAddCommand(words []string) (string, bool, error) {
 	if !m.validator.CheckMinCorrectLen(words) {
 		return "Введи корректное наименование упражнения и число повторений.", true, nil
 	}
@@ -160,98 +162,32 @@ func (m *MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 
 	defer statisticRepository.Destruct()
 
-	stat := statisticRepository.GetByConditions(inputTrainingsAnyElems, periods)
+	correctPeriods, _, err := m.prepareCorrectAndInvalidPeriods(periods)
 
-	var wherePeriods []string
-	var invalidPeriods []string
-
-	for _, value := range periods {
-		isValidText, err := m.validator.CheckIsOnlyRussianText(value)
-
-		if err != nil {
-			return "Произошла ошибка при проверке периода на валидность!", true, err
-		}
-
-		if isValidText {
-			val, ok := conditionsByPeriod[value]
-			if ok {
-				wherePeriods = append(wherePeriods, val)
-			} else {
-				invalidPeriods = append(invalidPeriods, value)
-			}
-		} else {
-			numsPeriod, invalidDatePeriods := m.prepareDateInterval(value)
-			if len(invalidDatePeriods) > 0 {
-				for _, invalid := range invalidDatePeriods {
-					invalidPeriods = append(invalidPeriods, invalid)
-				}
-			} else {
-				if m.sliceHelper.CheckLenSlice(numsPeriod, 1) {
-					wherePeriods = append(wherePeriods, "DATE(`created`) = DATE('"+numsPeriod[firstSliceIndex]+"')")
-				}
-
-				if m.sliceHelper.CheckLenSlice(numsPeriod, 2) {
-					wherePeriods = append(wherePeriods, "DATE(`created`) >= DATE('"+numsPeriod[firstSliceIndex]+"') AND DATE(`created`) <= DATE('"+numsPeriod[m.sliceHelper.SecondSliceElemIndex()]+"')")
-				}
-			}
-		}
-	}
-
-	periodsSQL := strings.Join(wherePeriods, " OR ")
-	log.Printf("Message info: %v \n", inputTrainings)
-	log.Printf("Message info: %v \n", periodsSQL)
-	query := `
-				SELECT t.name as train, sum(count) as total, count(count) as sets 
-				FROM statistic 
-				JOIN training t on t.id = statistic.training_id 
-				WHERE telegram_user_id = ? 
-				AND ` + periodsSQL + ` 
- 				AND t.name in (?` + strings.Repeat(",?", len(inputTrainings)-1) + `)
-				GROUP BY training_id;
-			`
-	//fmt.Println(query)
-
-	result, err := db.Query(
-		query,
-		append(append([]any{}, update.Message.From.ID), inputTrainingsAnyElems...)...,
-	)
-
-	log.Printf("Message info:  %v \n", result)
 	if err != nil {
-		sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-		continue
+		return "Произошла ошибка при проверке периода на валидность!", true, err
 	}
 
-	var results []ResultStatistic
-	for result.Next() {
-		var resultStruct ResultStatistic
-		err = result.Scan(&resultStruct.train, &resultStruct.total, &resultStruct.sets)
+	stat := statisticRepository.GetByConditions(inputTrainingsAnyElems, correctPeriods, dto.GetUserId())
 
-		if err != nil {
-			sendMessage(bot, update, fmt.Sprintf("Произошла ошибка БД: %d ", err))
-		}
-
-		results = append(results, resultStruct)
-	}
-
-	if m.sliceHelper.IsEmptySlice(results) {
-		sendMessage(
-			bot,
-			update,
-			"К сожалению по вашему запросу результаты не найдены. "+
-				"Попробуйте указать другие упражнения и период.",
-		)
+	if m.sliceHelper.IsEmptySliceStatisticEntity(stat) {
+		return "К сожалению по вашему запросу результаты не найдены. " +
+			"Попробуйте указать другие упражнения и период.", true, err
 	} else {
 		resultMessage := "Вы сделали:\n"
 
-		for _, result := range results {
-			resultMessage += fmt.Sprintf("%v в количестве %v раз, за %v подхода(ов).", result.train, result.total, result.sets)
+		for _, result := range stat {
+			resultMessage += fmt.Sprintf(
+				"%v в количестве %v раз, за %v подхода(ов).",
+				result.GetTraining().GetName().GetValue(),
+				result.GetCount().GetValue(),
+				result.GetsSets().GetValue(),
+			)
 		}
 
-		sendMessage(bot, update, resultMessage)
+		return resultMessage, true, nil
 	}
 
-	result.Close()
 }
 
 func (m *MessageHandler) prepareDateInterval(interval string) ([]string, []string) {
@@ -263,6 +199,7 @@ func (m *MessageHandler) prepareDateInterval(interval string) ([]string, []strin
 
 	if m.sliceHelper.CheckLenSlice(intervals, 1) {
 		formattedInterval, err := m.getDateFromNums(intervals[firstSliceIndex])
+
 		if err != nil {
 			invalidPeriods = append(invalidPeriods, intervals[firstSliceIndex])
 		}
@@ -305,4 +242,54 @@ func (m *MessageHandler) getDateFromNums(nums string) (string, error) {
 	}
 
 	return parse.Format("2006-01-02"), nil
+}
+
+func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string) ([]string, []string, error) {
+	var correctPeriods []string
+	var invalidPeriods []string
+	periodsRepository := new(periods_repository.Repository).Construct()
+	firstSliceIndex := m.sliceHelper.FirstSliceElemIndex()
+
+	for _, period := range periods {
+		isValidText, err := m.validator.CheckIsOnlyRussianText(period)
+
+		if err != nil {
+			return correctPeriods, invalidPeriods, err
+		}
+
+		if isValidText {
+			val, ok := periodsRepository.GetConditionsByPeriod(period)
+			if ok {
+				correctPeriods = append(correctPeriods, val)
+			} else {
+				invalidPeriods = append(invalidPeriods, period)
+			}
+		} else {
+			numsPeriod, invalidDatePeriods := m.prepareDateInterval(period)
+			if !m.sliceHelper.IsEmptySlice(invalidDatePeriods) {
+				for _, invalid := range invalidDatePeriods {
+					invalidPeriods = append(invalidPeriods, invalid)
+				}
+			} else {
+				if m.sliceHelper.CheckLenSlice(numsPeriod, 1) {
+					correctPeriods = append(
+						correctPeriods,
+						periodsRepository.GetConditionsByDate(numsPeriod[firstSliceIndex]),
+					)
+				}
+
+				if m.sliceHelper.CheckLenSlice(numsPeriod, 2) {
+					correctPeriods = append(
+						correctPeriods,
+						periodsRepository.GetConditionsByDateInterval(
+							numsPeriod[firstSliceIndex],
+							numsPeriod[m.sliceHelper.SecondSliceElemIndex()],
+						),
+					)
+				}
+			}
+		}
+	}
+
+	return correctPeriods, invalidPeriods, nil
 }

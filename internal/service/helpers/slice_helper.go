@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"regexp"
+	"sports-statistics/internal/service/entity/statistic"
 	"strings"
 )
 
@@ -49,9 +50,17 @@ func (h SliceHelper) SecondSliceElemIndex() int {
 func (h SliceHelper) ConvertFromStringToAnyElems(slice []string) []any {
 	result := make([]any, len(slice))
 
-	for i, training := range slice {
-		result[i] = training
+	for i, val := range slice {
+		result[i] = val
 	}
 
 	return result
+}
+
+func (h SliceHelper) IsEmptySliceStatisticEntity(slice []*statistic.Statistic) bool {
+	return h.CheckLenSliceStatisticEntity(slice, 0)
+}
+
+func (h SliceHelper) CheckLenSliceStatisticEntity(slice []*statistic.Statistic, length int) bool {
+	return len(slice) == length
 }

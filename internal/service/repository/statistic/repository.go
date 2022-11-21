@@ -9,5 +9,5 @@ type RepositoryInterface interface {
 	Destruct() error
 	GetError() error
 	AddStatistic(statistic *statistic.Statistic)
-	GetByConditions(trainings []any, periods []string) []*statistic.Statistic
+	GetByConditions(trainings []any, periods []string, userId int) []*statistic.Statistic
 }
