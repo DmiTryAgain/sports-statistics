@@ -81,8 +81,7 @@ func (r *Repository) GetByConditions(trainings []any, periods []string, userId i
 	var results []*statisticEntity.Statistic
 	for result.Next() {
 		var train string
-		var total int
-		var sets int
+		var total, sets int
 		err = result.Scan(&train, &total, &sets)
 
 		if err != nil {

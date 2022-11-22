@@ -43,3 +43,13 @@ func (r *Repository) GetConditionsByDateInterval(from string, to string) string 
 		to,
 	)
 }
+func (r *Repository) GetAllowTextPeriods() []string {
+	textPeriods := make([]string, len(r.conditions))
+	i := 0
+
+	for textPeriod, _ := range r.conditions {
+		textPeriods[i] = textPeriod
+		i++
+	}
+	return textPeriods
+}

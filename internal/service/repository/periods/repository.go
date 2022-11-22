@@ -5,4 +5,5 @@ type RepositoryInterface interface {
 	GetConditionsByPeriod(period string) (string, bool)
 	GetConditionsByDate(period string) string
 	GetConditionsByDateInterval(from string, to string) string
+	GetAllowTextPeriods() []string
 }

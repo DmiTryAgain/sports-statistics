@@ -1,6 +1,7 @@
 package message_handler
 
 import (
+	"bytes"
 	"fmt"
 	"sports-statistics/internal/config"
 	cr "sports-statistics/internal/repositiry/command_repository"
@@ -10,6 +11,10 @@ import (
 	"sports-statistics/internal/service/entity/statistic"
 	"sports-statistics/internal/service/entity/user"
 	"sports-statistics/internal/service/helpers"
+	"sports-statistics/internal/service/repository/command"
+	"sports-statistics/internal/service/repository/periods"
+	sri "sports-statistics/internal/service/repository/statistic"
+	tri "sports-statistics/internal/service/repository/training"
 	"strconv"
 	"strings"
 	"time"
@@ -19,15 +24,30 @@ const chatTypeGroup = "group"
 const dbErrorMessage = "Произошла ошибка БД!"
 
 type MessageHandler struct {
-	validator   TrainingValidatorInterface
-	sliceHelper *helpers.SliceHelper
+	validator           TrainingValidatorInterface
+	sliceHelper         *helpers.SliceHelper
+	stringHelper        *helpers.StringHelper
+	commandRepository   command.RepositoryInterface
+	trainingRepository  tri.RepositoryInterface
+	statisticRepository sri.RepositoryInterface
+	periodsRepository   periods.RepositoryInterface
 }
 
 func (m *MessageHandler) Construct() Handler {
 	m.validator = new(TrainingValidator)
 	m.sliceHelper = new(helpers.SliceHelper)
+	m.stringHelper = new(helpers.StringHelper)
+	m.commandRepository = new(cr.CommandRepository).Construct()
+	m.trainingRepository = new(tr.Repository).Construct()
+	m.statisticRepository = new(sr.Repository).Construct()
+	m.periodsRepository = new(periods_repository.Repository).Construct()
 
 	return m
+}
+
+func (m *MessageHandler) Destruct() {
+	defer m.statisticRepository.Destruct()
+	defer m.trainingRepository.Destruct()
 }
 
 func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
@@ -47,9 +67,9 @@ func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 		return "Чё?", true, nil
 	}
 
-	command := wordsFromMessText[firstSliceIndex]
+	inputCommand := wordsFromMessText[firstSliceIndex]
 	wordsFromMessText = m.sliceHelper.DeleteElemFromSlice(wordsFromMessText, firstSliceIndex)
-	commandIsValid, err := m.validator.CheckIsOnlyRussianText(command)
+	commandIsValid, err := m.validator.CheckIsOnlyRussianText(inputCommand)
 
 	if err != nil {
 		return "Произошла ошибка при проверке команды на валидность!", true, err
@@ -59,19 +79,20 @@ func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 		return "Команда должна состоять только из русских букв.", true, nil
 	}
 
-	commandRepository := new(cr.CommandRepository).Construct()
-
-	_, isAddCommand := commandRepository.GetAddCommands()[command]
-	_, isShowCommand := commandRepository.GetShowCommands()[command]
+	_, isAddCommand := m.commandRepository.GetAddCommands()[inputCommand]
+	_, isShowCommand := m.commandRepository.GetShowCommands()[inputCommand]
+	_, isHelpCommand := m.commandRepository.GetHelpCommands()[inputCommand]
 
 	switch true {
 	case isAddCommand:
 		return m.handleAddCommand(dto, wordsFromMessText)
 	case isShowCommand:
 		return m.handleShowCommand(dto)
+	case isHelpCommand:
+		return m.handleHelpCommand(wordsFromMessText)
 	}
 
-	return "Упс! Произошло некорректное поведение! Обратитесь за помощью к разработчику!", true, nil
+	return "Не могу обработать введёную Вами команду.", true, nil
 }
 
 func (m *MessageHandler) handleAddCommand(dto *Dto, words []string) (string, bool, error) {
@@ -109,20 +130,14 @@ func (m *MessageHandler) handleAddCommand(dto *Dto, words []string) (string, boo
 		return "Произошла ошибка при проверке количества повторений на валидность!", true, err
 	}
 
-	trainingRepository := new(tr.Repository).Construct()
-	statisticRepository := new(sr.Repository).Construct()
-
-	defer statisticRepository.Destruct()
-	defer trainingRepository.Destruct()
-
-	trainingEntity := trainingRepository.GetTrainingByName(training)
+	trainingEntity := m.trainingRepository.GetTrainingByName(training)
 
 	if err != nil {
 		fmt.Println(err)
 		return dbErrorMessage, true, err
 	}
 
-	statisticRepository.AddStatistic(
+	m.statisticRepository.AddStatistic(
 		new(statistic.Statistic).Construct(
 			nil,
 			trainingEntity,
@@ -133,7 +148,7 @@ func (m *MessageHandler) handleAddCommand(dto *Dto, words []string) (string, boo
 		),
 	)
 
-	err = statisticRepository.GetError()
+	err = m.statisticRepository.GetError()
 	fmt.Println(err)
 	if err != nil {
 		return dbErrorMessage, true, err
@@ -162,9 +177,6 @@ func (m *MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 	inputTrainingsAnyElems := m.sliceHelper.ConvertFromStringToAnyElems(inputTrainings)
 
 	periods := m.sliceHelper.DeleteElemFromSlice(inputByPeriod, firstSliceIndex)
-	statisticRepository := new(sr.Repository).Construct()
-
-	defer statisticRepository.Destruct()
 
 	correctPeriods, _, err := m.prepareCorrectAndInvalidPeriods(periods)
 
@@ -172,7 +184,7 @@ func (m *MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 		return "Произошла ошибка при проверке периода на валидность!", true, err
 	}
 
-	stat := statisticRepository.GetByConditions(inputTrainingsAnyElems, correctPeriods, dto.GetUserId())
+	stat := m.statisticRepository.GetByConditions(inputTrainingsAnyElems, correctPeriods, dto.GetUserId())
 
 	if m.sliceHelper.IsEmptySliceStatisticEntity(stat) {
 		return "К сожалению по вашему запросу результаты не найдены. " +
@@ -192,6 +204,87 @@ func (m *MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 		return resultMessage, true, nil
 	}
 
+}
+func (m *MessageHandler) handleHelpCommand(words []string) (string, bool, error) {
+	botName := config.Configs.GetBotName()
+	addCommands := m.stringHelper.KeyMapToString(m.commandRepository.GetAddCommands(), "`, `")
+	showCommands := m.stringHelper.KeyMapToString(m.commandRepository.GetShowCommands(), "`, `")
+
+	message := fmt.Sprintf(
+		"Привет! Я - бот, который поможет вести статистику спортивных упражнений, которые "+
+			"ты выполняешь. Ты же ведь занимаешься спортом, верно?🤔\n"+
+			"Я слушаю команды, когда ко мне обращаются. обратись ко мне вот так: `@%s`\n"+
+			"Исключением является личная переписка. Если ты напишешь мне в личку, я буду реагировать на "+
+			"любые твои сообщения. Но и в личных сообщениях поддерживается обращение, "+
+			"если уж сильно хочется)\n"+
+			"После обращения через пробел нужно написать команду и передать к ней данные, "+
+			"Список поддерживаемых команд: \n"+
+			"На добавление: `%s` \n"+
+			"На показ статистики: `%s` \n"+
+			"Чтобы посмотреть помощь по каждой комманде, отправь: `помощь` *название команды*\n"+
+			"Например: `помощь добавить`",
+		botName,
+		addCommands,
+		showCommands,
+	)
+
+	if !m.sliceHelper.IsEmptySlice(words) {
+		commandToHelpMessage := words[m.sliceHelper.FirstSliceElemIndex()]
+
+		_, isAddCommand := m.commandRepository.GetAddCommands()[commandToHelpMessage]
+		_, isShowCommand := m.commandRepository.GetShowCommands()[commandToHelpMessage]
+		_, isHelpCommand := m.commandRepository.GetHelpCommands()[commandToHelpMessage]
+
+		switch true {
+		case isAddCommand:
+			allowTrainings := m.trainingRepository.GetTrainingNames()
+			trainingBuf := bytes.Buffer{}
+
+			for _, training := range allowTrainings {
+				trainingBuf.WriteString(training.GetName().GetValue() + "`, `")
+			}
+
+			message = fmt.Sprintf(
+				"Чтобы записать результаты, отправь команду на добавление упражнения (`%s`). Затем через "+
+					"пробел укажи название упражнения, которое сделал. Далее через пробел укажи количество "+
+					"повторений, которое сделал.\n"+
+					"Например, ты сделал подход из 10 подтягиваний. Чтобы я всё корректно записал, напиши мне "+
+					"`@%s сделал подтягивание 10`\n"+
+					"Список доступных упражнений: `%s`",
+				addCommands,
+				botName,
+				trainingBuf.String(),
+			)
+		case isShowCommand:
+			periodsStr := strings.Join(m.periodsRepository.GetAllowTextPeriods(), "`, `")
+			message = fmt.Sprintf(
+				"Чтобы показать статистику, отправь команду `%s`. Затем укажи название упражнений, статистику "+
+					"которых ты хочешь посмотреть. *Можно ввести несколько, разделив упражнения запятой,* "+
+					"например, `подтягивание, отжимание`.\n"+
+					"Далее укажи период, за который ты хочешь посмотреть статистику. Период будет корректно "+
+					"распознан, если после указанных упражнений последует предлог *за*. Периодов можно указывать "+
+					"несколько через запятую. Для каждого периода нужно так же нужен предлог *за*.\n"+
+					"Например, нужно вывести статистику по подтягиваниям за сегодня, за 15.10.2022, "+
+					"за период с 01.10.2022 по 10.10.2022. Чтобы периоды обработались корректно, введи периоды"+
+					"следующим образом:\n"+
+					"`за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n"+
+					"Если период будет указан некорректно, результат будет без учёта некорректного периода. Если при "+
+					"вводе интервала дата *от* окажется больше даты *до*, они поменяются местами и результат за этот "+
+					"период будет найден корректно.\n"+
+					"В итоге корректная команда будет выглядеть следующим образом: \n"+
+					"`@%s покажи подтягивание, отжимание за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n"+
+					"Список поддерживаемых текстовых периодов: `%s`",
+				showCommands,
+				botName,
+				periodsStr,
+			)
+		case isHelpCommand:
+			message = "Помощь к команде помощи не предусмотрена. " +
+				"Надо ж было додуматься попросить помощь команде помощи🤔"
+		}
+	}
+
+	return message, true, nil
 }
 
 func (m *MessageHandler) prepareDateInterval(interval string) ([]string, []string) {
@@ -251,7 +344,6 @@ func (m *MessageHandler) getDateFromNums(nums string) (string, error) {
 func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string) ([]string, []string, error) {
 	var correctPeriods []string
 	var invalidPeriods []string
-	periodsRepository := new(periods_repository.Repository).Construct()
 	firstSliceIndex := m.sliceHelper.FirstSliceElemIndex()
 
 	for _, period := range periods {
@@ -262,7 +354,7 @@ func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string) ([]st
 		}
 
 		if isValidText {
-			val, ok := periodsRepository.GetConditionsByPeriod(period)
+			val, ok := m.periodsRepository.GetConditionsByPeriod(period)
 			if ok {
 				correctPeriods = append(correctPeriods, val)
 			} else {
@@ -278,14 +370,14 @@ func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string) ([]st
 				if m.sliceHelper.CheckLenSlice(numsPeriod, 1) {
 					correctPeriods = append(
 						correctPeriods,
-						periodsRepository.GetConditionsByDate(numsPeriod[firstSliceIndex]),
+						m.periodsRepository.GetConditionsByDate(numsPeriod[firstSliceIndex]),
 					)
 				}
 
 				if m.sliceHelper.CheckLenSlice(numsPeriod, 2) {
 					correctPeriods = append(
 						correctPeriods,
-						periodsRepository.GetConditionsByDateInterval(
+						m.periodsRepository.GetConditionsByDateInterval(
 							numsPeriod[firstSliceIndex],
 							numsPeriod[m.sliceHelper.SecondSliceElemIndex()],
 						),

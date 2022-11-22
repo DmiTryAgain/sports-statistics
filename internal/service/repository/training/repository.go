@@ -9,4 +9,5 @@ type RepositoryInterface interface {
 	Destruct() error
 	GetError() error
 	GetTrainingByName(trainingName string) *statistic.Training
+	GetTrainingNames() []*statistic.Training
 }

@@ -6,7 +6,7 @@ import (
 )
 
 type CommandRepository struct {
-	addCommands, showCommands map[string]any
+	addCommands, showCommands, helpCommands map[string]any
 }
 
 func (r *CommandRepository) Construct() command.RepositoryInterface {
@@ -21,6 +21,12 @@ func (r *CommandRepository) Construct() command.RepositoryInterface {
 		"выведи": helpers.StructStub{},
 	}
 
+	r.helpCommands = map[string]any{
+		"помощь": helpers.StructStub{},
+		"помоги": helpers.StructStub{},
+		"help":   helpers.StructStub{},
+	}
+
 	return r
 }
 
@@ -30,4 +36,8 @@ func (r *CommandRepository) GetAddCommands() map[string]any {
 
 func (r *CommandRepository) GetShowCommands() map[string]any {
 	return r.showCommands
+}
+
+func (r *CommandRepository) GetHelpCommands() map[string]any {
+	return r.helpCommands
 }

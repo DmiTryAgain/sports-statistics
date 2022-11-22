@@ -52,6 +52,8 @@ func (h *UpdateHandler) handleMessage(handler message_handler.Handler, messDto *
 	if send {
 		h.sendMessage(messDto.GetChatId(), messDto.GetMessageId(), msg)
 	}
+
+	handler.Destruct()
 }
 
 func (h *UpdateHandler) sendMessage(chatId int64, messageId int, message string) {

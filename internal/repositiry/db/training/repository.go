@@ -42,6 +42,31 @@ func (r *Repository) GetTrainingByName(trainingName string) *statisticEntity.Tra
 	return r.modelToEntity(&r.model)
 }
 
+func (r *Repository) GetTrainingNames() []*statisticEntity.Training {
+	trains, err := r.db.Query("SELECT " + r.model.GetNameColumn() + " from `" + r.model.GetTableName() + "`")
+
+	var results []*statisticEntity.Training
+	for trains.Next() {
+		var trainName string
+		err = trains.Scan(&trainName)
+
+		if err != nil {
+			r.err = err
+		}
+
+		results = append(
+			results,
+			new(statisticEntity.Training).Construct(
+				nil,
+				nil,
+				new(trainingEntity.Name).Construct(trainName),
+			),
+		)
+	}
+
+	return results
+}
+
 func (r *Repository) modelToEntity(model *mt.Training) *statisticEntity.Training {
 	return new(statisticEntity.Training).Construct(
 		new(trainingEntity.Id).Construct(model.Id),
