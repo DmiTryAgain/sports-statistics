@@ -7,7 +7,7 @@ import (
 )
 
 const textEntityMention = "mention"
-const minCorrectLenWordsSlice = 3
+const minCorrectLenWordsSlice = 2
 const minCorrectLenForPeriodsSlice = 2
 
 type TrainingValidator struct {
@@ -38,9 +38,9 @@ func (v TrainingValidator) CheckIsOnlyInt(count string) (bool, error) {
 }
 
 func (v TrainingValidator) CheckMinCorrectLen(words []string) bool {
-	return helpers.SliceHelper{}.CheckLenSlice(words, minCorrectLenWordsSlice)
+	return helpers.SliceHelper{}.CheckMinLenSlice(words, minCorrectLenWordsSlice)
 }
 
 func (v TrainingValidator) CheckMinCorrectLenForPeriods(words []string) bool {
-	return helpers.SliceHelper{}.CheckLenSlice(words, minCorrectLenForPeriodsSlice)
+	return helpers.SliceHelper{}.CheckMinLenSlice(words, minCorrectLenForPeriodsSlice)
 }

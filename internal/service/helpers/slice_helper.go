@@ -35,6 +35,10 @@ func (h SliceHelper) CheckLenSlice(slice []string, length int) bool {
 	return len(slice) == length
 }
 
+func (h SliceHelper) CheckMinLenSlice(slice []string, minLen int) bool {
+	return len(slice) >= minLen
+}
+
 func (h SliceHelper) IsEmptySlice(slice []string) bool {
 	return h.CheckLenSlice(slice, 0)
 }

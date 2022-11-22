@@ -13,6 +13,8 @@ const updsTimeout = 60
 const dbDsn = "DB_DSN"
 const dbType = "DB_TYPE"
 
+var Configs = new(Config).Construct()
+
 type Config struct {
 	name, secret, dsn, typeDb, replyFormat string
 	updsTimeout                            int
@@ -50,7 +52,7 @@ func (b *Config) GetBotSecret() string {
 }
 
 func (b *Config) GetReplyFormat() string {
-	return b.secret
+	return b.replyFormat
 }
 
 func (b *Config) GetBotUpdatesTimeout() int {

@@ -2,7 +2,8 @@ package training
 
 import (
 	"database/sql"
-	"sports-statistics/internal/app"
+	_ "github.com/go-sql-driver/mysql"
+	"sports-statistics/internal/config"
 	mt "sports-statistics/internal/models/training"
 	statisticEntity "sports-statistics/internal/service/entity/statistic"
 	trainingEntity "sports-statistics/internal/service/entity/training"
@@ -12,11 +13,12 @@ import (
 type Repository struct {
 	db    *sql.DB
 	err   error
-	model *mt.Training
+	model mt.Training
 }
 
 func (r *Repository) Construct() training.RepositoryInterface {
-	r.db, r.err = sql.Open(app.Config.GetDbType(), app.Config.GetDbDsn())
+	r.db, r.err = sql.Open(config.Configs.GetDbType(), config.Configs.GetDbDsn())
+	r.model = mt.Training{}
 
 	return r
 }
@@ -30,14 +32,14 @@ func (r *Repository) GetError() error {
 }
 
 func (r *Repository) GetTrainingByName(trainingName string) *statisticEntity.Training {
-	train := r.db.QueryRow("SELECT * from `?` where `Name` = ? LIMIT 1", r.model.GetTableName(), trainingName)
+	train := r.db.QueryRow("SELECT * from `"+r.model.GetTableName()+"` where `name` = ? LIMIT 1", trainingName)
 	err := train.Scan(&r.model.Id, &r.model.Alias, &r.model.Name)
 
 	if err != nil {
 		r.err = err
 	}
 
-	return r.modelToEntity(r.model)
+	return r.modelToEntity(&r.model)
 }
 
 func (r *Repository) modelToEntity(model *mt.Training) *statisticEntity.Training {

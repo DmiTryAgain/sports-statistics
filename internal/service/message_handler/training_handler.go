@@ -2,7 +2,7 @@ package message_handler
 
 import (
 	"fmt"
-	"sports-statistics/internal/app"
+	"sports-statistics/internal/config"
 	cr "sports-statistics/internal/repositiry/command_repository"
 	sr "sports-statistics/internal/repositiry/db/statistic"
 	tr "sports-statistics/internal/repositiry/db/training"
@@ -33,7 +33,7 @@ func (m *MessageHandler) Construct() Handler {
 func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 	firstSliceIndex := m.sliceHelper.FirstSliceElemIndex()
 	wordsFromMessText := m.sliceHelper.SplitStringToSlice(dto.GetText(), " ")
-	lowerBotName := strings.ToLower(app.Config.GetBotName())
+	lowerBotName := strings.ToLower(config.Configs.GetBotName())
 	isBotCalled := m.validator.CheckBotCall(dto.GetTextEntities(), wordsFromMessText[firstSliceIndex], lowerBotName)
 
 	if !isBotCalled && dto.GetChatType() == chatTypeGroup {
@@ -48,6 +48,7 @@ func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 	}
 
 	command := wordsFromMessText[firstSliceIndex]
+	wordsFromMessText = m.sliceHelper.DeleteElemFromSlice(wordsFromMessText, firstSliceIndex)
 	commandIsValid, err := m.validator.CheckIsOnlyRussianText(command)
 
 	if err != nil {
@@ -65,7 +66,7 @@ func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 
 	switch true {
 	case isAddCommand:
-		return m.handleAddCommand(wordsFromMessText)
+		return m.handleAddCommand(dto, wordsFromMessText)
 	case isShowCommand:
 		return m.handleShowCommand(dto)
 	}
@@ -73,7 +74,7 @@ func (m *MessageHandler) HandleWithResponse(dto *Dto) (string, bool, error) {
 	return "Упс! Произошло некорректное поведение! Обратитесь за помощью к разработчику!", true, nil
 }
 
-func (m *MessageHandler) handleAddCommand(words []string) (string, bool, error) {
+func (m *MessageHandler) handleAddCommand(dto *Dto, words []string) (string, bool, error) {
 	if !m.validator.CheckMinCorrectLen(words) {
 		return "Введи корректное наименование упражнения и число повторений.", true, nil
 	}
@@ -116,7 +117,8 @@ func (m *MessageHandler) handleAddCommand(words []string) (string, bool, error) 
 
 	trainingEntity := trainingRepository.GetTrainingByName(training)
 
-	if trainingRepository.GetError() != nil {
+	if err != nil {
+		fmt.Println(err)
 		return dbErrorMessage, true, err
 	}
 
@@ -124,14 +126,16 @@ func (m *MessageHandler) handleAddCommand(words []string) (string, bool, error) 
 		new(statistic.Statistic).Construct(
 			nil,
 			trainingEntity,
-			new(statistic.User).Construct(new(user.Id).Construct(countInt)),
+			new(statistic.User).Construct(new(user.Id).Construct(dto.GetUserId())),
 			nil,
 			new(statistic.Count).Construct(countInt),
 			nil,
 		),
 	)
 
-	if statisticRepository.GetError() != nil {
+	err = statisticRepository.GetError()
+	fmt.Println(err)
+	if err != nil {
 		return dbErrorMessage, true, err
 	}
 

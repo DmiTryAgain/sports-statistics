@@ -24,10 +24,10 @@ func (t *Training) GetId() *st.Id {
 	return t.id
 }
 
-func (t *Training) GetAlias() *st.Id {
-	return t.id
+func (t *Training) GetAlias() *st.Alias {
+	return t.alias
 }
 
-func (t *Training) GetName() *st.Id {
-	return t.id
+func (t *Training) GetName() *st.Name {
+	return t.name
 }

@@ -2,7 +2,8 @@ package statistic
 
 import (
 	"database/sql"
-	"sports-statistics/internal/app"
+	_ "github.com/go-sql-driver/mysql"
+	"sports-statistics/internal/config"
 	ms "sports-statistics/internal/models/statistic"
 	statisticEntity "sports-statistics/internal/service/entity/statistic"
 	trainingEntity "sports-statistics/internal/service/entity/training"
@@ -18,7 +19,7 @@ type Repository struct {
 }
 
 func (r *Repository) Construct() statistic.RepositoryInterface {
-	r.db, r.err = sql.Open(app.Config.GetDbType(), app.Config.GetDbDsn())
+	r.db, r.err = sql.Open(config.Configs.GetDbType(), config.Configs.GetDbDsn())
 	r.model = ms.Statistic{}
 
 	return r
@@ -33,12 +34,15 @@ func (r *Repository) GetError() error {
 }
 
 func (r *Repository) AddStatistic(statistic *statisticEntity.Statistic) {
+	query := `INSERT INTO ` + r.model.GetTableName() + ` (
+		` + r.model.GetTelegramUserIdColumnName() + `, 
+		` + r.model.GetTrainingIdColumnName() + `, 
+		` + r.model.GetCountColumnName() +
+		`) 
+	VALUES(?, ?, ?)`
+
 	insert, err := r.db.Query(
-		"INSERT INTO `?` (`?`, `?`, `?`) VALUES(?, ?, ?)",
-		r.model.GetTableName(),
-		r.model.GetTelegramUserIdColumnName(),
-		r.model.GetTrainingIdColumnName(),
-		r.model.GetCountColumnName(),
+		query,
 		statistic.GetUser().GetId().GetValue(),
 		statistic.GetTraining().GetId().GetValue(),
 		statistic.GetCount().GetValue(),
@@ -48,11 +52,7 @@ func (r *Repository) AddStatistic(statistic *statisticEntity.Statistic) {
 		r.err = err
 	}
 
-	err = insert.Scan()
-
-	if err != nil {
-		r.err = err
-	}
+	insert.Close()
 }
 
 func (r *Repository) GetByConditions(trainings []any, periods []string, userId int) []*statisticEntity.Statistic {

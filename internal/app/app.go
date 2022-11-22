@@ -6,17 +6,16 @@ import (
 	"sports-statistics/internal/service/update_handler"
 )
 
-var Config = new(config.Config).Construct()
-
 func Run() {
-	bot := createBot(Config.GetBotSecret())
+	bot := createBot(config.Configs.GetBotSecret())
 	updates, err := getListenTelegramBotUpdates(bot)
 
 	if err != nil {
 		panic(err)
 	}
 
-	update_handler.Handle(bot, &updates)
+	handler := new(update_handler.UpdateHandler).Construct(bot, &updates)
+	handler.Handle()
 }
 
 func getListenTelegramBotUpdates(bot *tgBotApi.BotAPI) (tgBotApi.UpdatesChannel, error) {
@@ -25,7 +24,7 @@ func getListenTelegramBotUpdates(bot *tgBotApi.BotAPI) (tgBotApi.UpdatesChannel,
 
 	/** TODO: Разобрать, что за NewUpdate() и почему 0 */
 	u := tgBotApi.NewUpdate(0)
-	u.Timeout = Config.GetBotUpdatesTimeout()
+	u.Timeout = config.Configs.GetBotUpdatesTimeout()
 
 	return bot.GetUpdatesChan(u)
 }
