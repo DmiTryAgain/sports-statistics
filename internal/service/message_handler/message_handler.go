@@ -176,9 +176,9 @@ func (m *MessageHandler) handleShowCommand(dto *Dto) (string, bool, error) {
 
 	inputTrainingsAnyElems := m.sliceHelper.ConvertFromStringToAnyElems(inputTrainings)
 
-	periods := m.sliceHelper.DeleteElemFromSlice(inputByPeriod, firstSliceIndex)
+	rawPeriods := m.sliceHelper.DeleteElemFromSlice(inputByPeriod, firstSliceIndex)
 
-	correctPeriods, _, err := m.prepareCorrectAndInvalidPeriods(periods)
+	correctPeriods, _, err := m.prepareCorrectAndInvalidPeriods(rawPeriods)
 
 	if err != nil {
 		return "Произошла ошибка при проверке периода на валидность!", true, err
