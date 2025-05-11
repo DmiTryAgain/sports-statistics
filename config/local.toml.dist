@@ -1,0 +1,12 @@
+[Bot]
+Token=token
+Name=sportsStatisticsBot
+ReplyFormat=markdown
+Debug=true
+Timeout=30s
+
+[Database]
+Addr            = "localhost:5434"
+User            = "postgres"
+Database        = "sport-statistics"
+Password        = "postgres"
