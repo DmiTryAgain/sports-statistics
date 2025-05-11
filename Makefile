@@ -1,0 +1,46 @@
+MAIN := main.go
+PKG := `go list -mod=vendor -f {{.Dir}} ./...`
+
+ifeq ($(RACE),1)
+	RACEFLAG=-race
+endif
+
+build:
+	@CGO_ENABLED=0 go build -mod=vendor $(RACEFLAG) -o ${NAME} $(MAIN)
+
+run:
+	@echo "Compiling"
+	@go run -mod=vendor $(RACEFLAG) $(MAIN) -config=conf.toml -verbose -verbose_sql
+
+mod:
+	@go mod tidy
+	@go mod vendor
+	@git add vendor
+
+test:
+	@echo "Running tests"
+	@go test -mod=vendor $(RACEFLAG) -coverprofile=coverage.txt -covermode count $(PKG)
+
+lint:
+	@golangci-lint run -c .golangci.yml
+
+MAPPING := "statistic:statistics"
+NS := "NONE"
+ENTITY := "NONE"
+
+mfd-xml:
+	@mfd-generator xml -c "postgres://postgres:postgres@localhost:5432/sport_statsrv?sslmode=disable" -m ./docs/model/$(MAIN).mfd -n $(MAPPING)
+mfd-model:
+	@mfd-generator model -m ./docs/model/$(MAIN).mfd -p db -o ./pkg/db
+mfd-repo: --check-ns
+	@mfd-generator repo -m ./docs/model/$(MAIN).mfd -p db -o ./pkg/db -n $(NS)
+
+--check-ns:
+ifeq ($(NS),"NONE")
+	$(error "You need to set NS variable before run this command.")
+endif
+
+--check-entity:
+ifeq ($(ENTITY),"NONE")
+	$(error "You need to set ENTITY variable before run this command.")
+endif
