@@ -7,8 +7,6 @@ import (
 	"hash/crc64"
 	"reflect"
 
-	"github.com/DmiTryAgain/sports-statistics/pkg/embedlog"
-
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
 )
@@ -16,7 +14,6 @@ import (
 // DB stores db connection
 type DB struct {
 	*pg.DB
-	embedlog.Logger
 
 	crcTable *crc64.Table
 }
@@ -25,7 +22,6 @@ type DB struct {
 func New(db *pg.DB) DB {
 	d := DB{DB: db, crcTable: crc64.MakeTable(crc64.ECMA)}
 
-	d.SetStdLoggers(true)
 	return d
 }
 
@@ -56,7 +52,7 @@ func (db *DB) RunInLock(ctx context.Context, lockName string, fns ...func(*pg.Tx
 	lock := int64(crc64.Checksum([]byte(lockName), db.crcTable))
 
 	return db.RunInTransaction(ctx, func(tx *pg.Tx) (err error) {
-		if _, err = tx.Exec("select pg_advisory_xact_lock(?)", lock); err != nil {
+		if _, err = tx.Exec("select pg_advisory_xact_lock(?) -- ?", lock, lockName); err != nil {
 			return
 		}
 

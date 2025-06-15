@@ -10,19 +10,19 @@ import (
 
 var Columns = struct {
 	Statistic struct {
-		ID, TgUserID, Exercise, Value, Params, CreatedAt, StatusID string
+		ID, TgUserID, Exercise, Params, CreatedAt, StatusID, Count string
 	}
 }{
 	Statistic: struct {
-		ID, TgUserID, Exercise, Value, Params, CreatedAt, StatusID string
+		ID, TgUserID, Exercise, Params, CreatedAt, StatusID, Count string
 	}{
 		ID:        "statisticId",
 		TgUserID:  "tgUserId",
 		Exercise:  "exercise",
-		Value:     "value",
 		Params:    "params",
 		CreatedAt: "createdAt",
 		StatusID:  "statusId",
+		Count:     "count",
 	},
 }
 
@@ -43,10 +43,10 @@ type Statistic struct {
 	tableName struct{} `pg:"statistics,alias:t,discard_unknown_columns"`
 
 	ID        int              `pg:"statisticId,pk"`
-	TgUserID  int              `pg:"tgUserId,use_zero"`
+	TgUserID  string           `pg:"tgUserId,use_zero"`
 	Exercise  string           `pg:"exercise,use_zero"`
-	Value     float64          `pg:"value,use_zero"`
 	Params    *StatisticParams `pg:"params"`
 	CreatedAt time.Time        `pg:"createdAt,use_zero"`
 	StatusID  int              `pg:"statusId,use_zero"`
+	Count     float64          `pg:"count,use_zero"`
 }

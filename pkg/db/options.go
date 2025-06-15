@@ -14,10 +14,6 @@ const (
 	StatusEnabled = iota + 1
 	StatusDisabled
 	StatusDeleted
-
-	// review statuses
-	StatusReviewNew
-	StatusReviewUnrated
 )
 
 var (
@@ -52,7 +48,7 @@ func NewSortField(column string, sortDesc bool) SortField {
 // OpFunc is a function that applies different options to query.
 type OpFunc func(query *orm.Query)
 
-// WithColumns is a function that adds uses specific columns to query.
+// WithSort is a function that adds uses specific columns to query.
 func WithSort(fields ...SortField) OpFunc {
 	return func(query *orm.Query) {
 		for _, f := range fields {
@@ -109,12 +105,10 @@ func EnabledOnly() OpFunc {
 }
 
 // applyOps applies operations to current orm query.
-func applyOps(q *orm.Query, ops ...OpFunc) *orm.Query {
+func applyOps(q *orm.Query, ops ...OpFunc) {
 	for _, op := range ops {
 		op(q)
 	}
-
-	return q
 }
 
 const (

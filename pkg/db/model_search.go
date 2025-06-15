@@ -56,13 +56,17 @@ type StatisticSearch struct {
 	search
 
 	ID            *int
-	TgUserID      *int
+	TgUserID      *string
 	Exercise      *string
-	Value         *float64
 	CreatedAt     *time.Time
 	StatusID      *int
+	Count         *float64
 	IDs           []int
+	Exercises     []string
+	TgUserIDILike *string
 	ExerciseILike *string
+	CreatedAtFrom *time.Time
+	CreatedAtTo   *time.Time
 }
 
 func (ss *StatisticSearch) Apply(query *orm.Query) *orm.Query {
@@ -78,20 +82,32 @@ func (ss *StatisticSearch) Apply(query *orm.Query) *orm.Query {
 	if ss.Exercise != nil {
 		ss.where(query, Tables.Statistic.Alias, Columns.Statistic.Exercise, ss.Exercise)
 	}
-	if ss.Value != nil {
-		ss.where(query, Tables.Statistic.Alias, Columns.Statistic.Value, ss.Value)
-	}
 	if ss.CreatedAt != nil {
 		ss.where(query, Tables.Statistic.Alias, Columns.Statistic.CreatedAt, ss.CreatedAt)
 	}
 	if ss.StatusID != nil {
 		ss.where(query, Tables.Statistic.Alias, Columns.Statistic.StatusID, ss.StatusID)
 	}
+	if ss.Count != nil {
+		ss.where(query, Tables.Statistic.Alias, Columns.Statistic.Count, ss.Count)
+	}
 	if len(ss.IDs) > 0 {
 		Filter{Columns.Statistic.ID, ss.IDs, SearchTypeArray, false}.Apply(query)
 	}
+	if len(ss.Exercises) > 0 {
+		Filter{Columns.Statistic.Exercise, ss.Exercises, SearchTypeArray, false}.Apply(query)
+	}
+	if ss.TgUserIDILike != nil {
+		Filter{Columns.Statistic.TgUserID, *ss.TgUserIDILike, SearchTypeILike, false}.Apply(query)
+	}
 	if ss.ExerciseILike != nil {
 		Filter{Columns.Statistic.Exercise, *ss.ExerciseILike, SearchTypeILike, false}.Apply(query)
+	}
+	if ss.CreatedAtFrom != nil {
+		Filter{Columns.Statistic.CreatedAt, *ss.CreatedAtFrom, SearchTypeGE, false}.Apply(query)
+	}
+	if ss.CreatedAtTo != nil {
+		Filter{Columns.Statistic.CreatedAt, *ss.CreatedAtTo, SearchTypeLE, false}.Apply(query)
 	}
 
 	ss.apply(query)

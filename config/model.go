@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/go-pg/pg/v10"
 	"time"
+
+	"github.com/go-pg/pg/v10"
 )
 
 type Config struct {

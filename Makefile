@@ -17,23 +17,24 @@ mod:
 	@go mod vendor
 	@git add vendor
 
-test:
-	@echo "Running tests"
-	@go test -mod=vendor $(RACEFLAG) -coverprofile=coverage.txt -covermode count $(PKG)
+fmt:
+	@golangci-lint fmt
 
 lint:
-	@golangci-lint run -c .golangci.yml
+	@golangci-lint version
+	@golangci-lint config verify
+	@golangci-lint run
 
 MAPPING := "statistic:statistics"
 NS := "NONE"
 ENTITY := "NONE"
 
 mfd-xml:
-	@mfd-generator xml -c "postgres://postgres:postgres@localhost:5432/sport_statsrv?sslmode=disable" -m ./docs/model/$(MAIN).mfd -n $(MAPPING)
+	@mfd-generator xml -c "postgres://postgres:postgres@localhost:5432/sport_statsrv?sslmode=disable" -m ./docs/model/sportStatistics.mfd -n $(MAPPING)
 mfd-model:
-	@mfd-generator model -m ./docs/model/$(MAIN).mfd -p db -o ./pkg/db
+	@mfd-generator model -m ./docs/model/sportStatistics.mfd -p db -o ./pkg/db
 mfd-repo: --check-ns
-	@mfd-generator repo -m ./docs/model/$(MAIN).mfd -p db -o ./pkg/db -n $(NS)
+	@mfd-generator repo -m ./docs/model/sportStatistics.mfd -p db -o ./pkg/db -n $(NS)
 
 --check-ns:
 ifeq ($(NS),"NONE")

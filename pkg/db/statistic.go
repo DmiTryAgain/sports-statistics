@@ -3,8 +3,8 @@ package db
 import (
 	"context"
 	"errors"
-	"github.com/go-pg/pg/v10"
 
+	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
 )
 

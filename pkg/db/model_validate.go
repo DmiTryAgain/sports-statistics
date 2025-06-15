@@ -17,6 +17,10 @@ const (
 func (s Statistic) Validate() (errors map[string]string, valid bool) {
 	errors = map[string]string{}
 
+	if utf8.RuneCountInString(s.TgUserID) > 255 {
+		errors[Columns.Statistic.TgUserID] = ErrMaxLength
+	}
+
 	if utf8.RuneCountInString(s.Exercise) > 255 {
 		errors[Columns.Statistic.Exercise] = ErrMaxLength
 	}

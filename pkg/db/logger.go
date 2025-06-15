@@ -2,14 +2,21 @@ package db
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"time"
 
 	"github.com/go-pg/pg/v10"
+	"github.com/vmkteam/embedlog"
+	zm "github.com/vmkteam/zenrpc-middleware"
+	"github.com/vmkteam/zenrpc/v2"
 )
 
 type QueryLogger struct {
-	logger *log.Logger
+	embedlog.Logger
+}
+
+func NewQueryLogger(logger embedlog.Logger) QueryLogger {
+	return QueryLogger{Logger: logger}
 }
 
 func (ql QueryLogger) BeforeQuery(ctx context.Context, event *pg.QueryEvent) (context.Context, error) {
@@ -22,9 +29,10 @@ func (ql QueryLogger) BeforeQuery(ctx context.Context, event *pg.QueryEvent) (co
 }
 
 func (ql QueryLogger) AfterQuery(ctx context.Context, event *pg.QueryEvent) error {
+	method := fmt.Sprintf("%s.%s", zenrpc.NamespaceFromContext(ctx), zm.MethodFromContext(ctx))
 	query, err := event.FormattedQuery()
 	if err != nil {
-		ql.logger.Printf("formatted query err=%s", err)
+		ql.Error(ctx, string(query), "err", err, "rpc", method)
 	}
 
 	var since time.Duration
@@ -36,10 +44,6 @@ func (ql QueryLogger) AfterQuery(ctx context.Context, event *pg.QueryEvent) erro
 		}
 	}
 
-	ql.logger.Printf("query=%s duration=%v", query, since)
+	ql.Log().DebugContext(ctx, string(query), "rpc", method, "duration", since)
 	return nil
-}
-
-func NewQueryLogger(logger *log.Logger) QueryLogger {
-	return QueryLogger{logger: logger}
 }
