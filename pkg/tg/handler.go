@@ -88,7 +88,7 @@ func (m *MessageHandler) initMessages() {
 
 	m.helpHelpMsg = "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь команде помощи🤔"
 
-	m.errMsg = "❌ Произошла ошибка при просмотре статистики. Попробуйте позже"
+	m.errMsg = "❌ Произошла ошибка. Попробуйте позже"
 }
 
 func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
@@ -114,6 +114,7 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 		msg.ReplyToMessageID = update.Message.MessageID
+		msg.ParseMode = m.cfg.ReplyFormat
 
 		if _, err := m.tgBot.Send(msg); err != nil {
 			// TODO: make retries
@@ -239,7 +240,7 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 	}
 
 	// Удаляем ненужный предлог
-	rawMsg = strings.ReplaceAll(rawMsg, "за", "")
+	rawMsg = strings.ReplaceAll(rawMsg, " за", "")
 	// Разбиваем по пробелам
 	words := strings.Split(rawMsg, " ")
 
