@@ -39,7 +39,7 @@ func (sr StatisticRepo) GroupedStatisticByFilters(ctx context.Context, search Gr
 	b.WriteString(tgUserIDFilter)
 
 	if len(search.Exercises) != 0 {
-		exFilter := string(formatter.FormatQuery([]byte{}, ` AND t."exercise" = ? `, pg.In(search.Exercises)))
+		exFilter := string(formatter.FormatQuery([]byte{}, ` AND t."exercise" in (?) `, pg.In(search.Exercises)))
 		b.WriteString(exFilter)
 	}
 
