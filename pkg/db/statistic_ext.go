@@ -44,9 +44,9 @@ func (sr StatisticRepo) GroupedStatisticByFilters(ctx context.Context, search Gr
 	}
 
 	if len(search.Periods) != 0 {
-		b.WriteString(`AND (true`)
+		b.WriteString(`AND (false`)
 		for i := range search.Periods {
-			periodFilter := string(formatter.FormatQuery([]byte{}, ` OR t."createdAt" >= ? AND t."createdAt" < ? `, search.Periods[i].From, search.Periods[i].To))
+			periodFilter := string(formatter.FormatQuery([]byte{}, ` OR (t."createdAt" >= ? AND t."createdAt" < ?) `, search.Periods[i].From, search.Periods[i].To))
 			b.WriteString(periodFilter)
 		}
 		b.WriteString(`)`)
