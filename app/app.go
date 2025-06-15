@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DmiTryAgain/sports-statistics/config"
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 	"github.com/DmiTryAgain/sports-statistics/pkg/tg"
 
@@ -16,14 +15,14 @@ import (
 type App struct {
 	embedlog.Logger
 
-	cfg     config.Config
+	cfg     tg.Config
 	db      db.DB
 	dbc     *pg.DB
 	tgBot   *tgbotapi.BotAPI
 	handler *tg.MessageHandler
 }
 
-func New(lg embedlog.Logger, db db.DB, dbc *pg.DB, cfg config.Config) (*App, error) {
+func New(lg embedlog.Logger, db db.DB, dbc *pg.DB, cfg tg.Config) (*App, error) {
 	// create tg bot
 	bot, err := tgbotapi.NewBotAPI(cfg.Bot.Token)
 	if err != nil {

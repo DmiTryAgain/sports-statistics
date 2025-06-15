@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"github.com/DmiTryAgain/sports-statistics/app"
-	"github.com/DmiTryAgain/sports-statistics/config"
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
+	"github.com/DmiTryAgain/sports-statistics/pkg/tg"
 
 	"github.com/BurntSushi/toml"
 	"github.com/go-pg/pg/v10"
@@ -23,11 +23,12 @@ var (
 	flVerbose    = fs.Bool("verbose", false, "enable debug output")
 	flJSONLogs   = fs.Bool("json", false, "enable json output")
 	flDev        = fs.Bool("dev", false, "enable dev mode")
-	cfg          config.Config
+	cfg          tg.Config
 )
 
 func main() {
-	flag.Parse()
+	flag.DefaultConfigFlagname = "config.flag"
+	exitOnError(fs.Parse(os.Args[1:]))
 
 	// read config
 	if _, err := toml.DecodeFile(*flConfigPath, &cfg); err != nil {

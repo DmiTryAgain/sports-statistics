@@ -10,7 +10,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/DmiTryAgain/sports-statistics/config"
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 
 	"github.com/go-pg/pg/v10"
@@ -24,7 +23,7 @@ type MessageHandler struct {
 	dbc      *pg.DB
 	statRepo db.StatisticRepo
 	tgBot    *tgbotapi.BotAPI
-	cfg      config.Bot
+	cfg      Bot
 
 	commonHelpMsg string
 	addHelpMsg    string
@@ -33,7 +32,7 @@ type MessageHandler struct {
 	errMsg        string
 }
 
-func New(logger embedlog.Logger, dbc *pg.DB, tgBot *tgbotapi.BotAPI, cfg config.Bot) *MessageHandler {
+func New(logger embedlog.Logger, dbc *pg.DB, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
 	h := &MessageHandler{
 		Logger:   logger,
 		dbc:      dbc,
@@ -107,8 +106,9 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 
 		text, err := m.Handle(ctx, update)
 		if err != nil {
-			text = "Ошибка при обработке сообщения" // TODO: handle better
-		} else if text != "" {
+			text = m.errMsg // TODO: handle better
+			m.Error(ctx, err.Error())
+		} else if text == "" {
 			continue
 		}
 
@@ -226,7 +226,7 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg string, tgUserID 
 			StatusID: 1,
 		})
 		if err != nil {
-			return m.errMsg, err
+			return "", err
 		}
 	}
 
@@ -298,7 +298,7 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 	}
 	stats, err := m.statRepo.GroupedStatisticByFilters(ctx, s)
 	if err != nil {
-		return m.errMsg, fmt.Errorf("fetch statistic, err=%w", err)
+		return "", fmt.Errorf("fetch statistic, err=%w", err)
 	}
 
 	// Если ничего нет, выходим
@@ -308,7 +308,7 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 
 	table, err := m.buildTableByStat(stats)
 	if err != nil {
-		return m.errMsg, fmt.Errorf("build table by stat, err=%w", err)
+		return "", fmt.Errorf("build table by stat, err=%w", err)
 	}
 
 	res += table

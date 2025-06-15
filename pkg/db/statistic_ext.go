@@ -33,19 +33,23 @@ func (sr StatisticRepo) GroupedStatisticByFilters(ctx context.Context, search Gr
 		WHERE true
 	`)
 
-	enabledFilter := string(formatter.FormatQuery([]byte{}, ` t."statusId" = ? `, StatusEnabled))
+	enabledFilter := string(formatter.FormatQuery([]byte{}, ` AND t."statusId" = ? `, StatusEnabled))
 	b.WriteString(enabledFilter)
-	tgUserIDFilter := string(formatter.FormatQuery([]byte{}, ` t."tgUserId" = ? `, search.TgUserID))
+	tgUserIDFilter := string(formatter.FormatQuery([]byte{}, ` AND t."tgUserId" = ? `, search.TgUserID))
 	b.WriteString(tgUserIDFilter)
 
 	if len(search.Exercises) != 0 {
-		exFilter := string(formatter.FormatQuery([]byte{}, ` t."exercise" = ? `, pg.In(search.Exercises)))
+		exFilter := string(formatter.FormatQuery([]byte{}, ` AND t."exercise" = ? `, pg.In(search.Exercises)))
 		b.WriteString(exFilter)
 	}
 
-	for i := range search.Periods {
-		periodFilter := string(formatter.FormatQuery([]byte{}, ` t."createdAt" >= ? AND t."createdAt" < ? `, search.Periods[i].From, search.Periods[i].To))
-		b.WriteString(periodFilter)
+	if len(search.Periods) != 0 {
+		b.WriteString(`AND (true`)
+		for i := range search.Periods {
+			periodFilter := string(formatter.FormatQuery([]byte{}, ` OR t."createdAt" >= ? AND t."createdAt" < ? `, search.Periods[i].From, search.Periods[i].To))
+			b.WriteString(periodFilter)
+		}
+		b.WriteString(`)`)
 	}
 
 	b.WriteString(`

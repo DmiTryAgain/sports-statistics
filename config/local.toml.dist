@@ -8,5 +8,5 @@ Timeout=30s
 [Database]
 Addr            = "localhost:5434"
 User            = "postgres"
-Database        = "sport-statistics"
+Database        = "sport_statsrv"
 Password        = "postgres"
