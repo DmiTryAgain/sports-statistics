@@ -17,6 +17,8 @@
 # IDE
 .idea/
 
-# .env
-.env
+# config
+config/local.toml
+
+sportstat
 
