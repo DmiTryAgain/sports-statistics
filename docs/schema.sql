@@ -1,9 +1,3 @@
--- =============================================================================
--- Diagram Name: sportStatistics
--- Created on: 11/8/2024 2:26:28 PM
--- Diagram Version:
--- =============================================================================
-
 DROP TABLE IF EXISTS "statistics" CASCADE;
 
 CREATE TABLE "statistics"
@@ -34,4 +28,3 @@ CREATE INDEX "statistics_partitioned_tgUserId"
 
 CREATE INDEX "statistics_partitioned_exercise"
     ON statistics ("exercise");
-

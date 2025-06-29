@@ -14,6 +14,9 @@ run:
 	@echo "Compiling"
 	@go run $(GOFLAGS) $(MAIN) -config=config/local.toml -dev
 
+test:
+	@go test -v ./...
+
 mod:
 	@go mod tidy
 	@go mod vendor
