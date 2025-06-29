@@ -2,6 +2,7 @@ package tg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -17,6 +18,15 @@ import (
 	"github.com/vmkteam/embedlog"
 )
 
+var (
+	errCantDetectLang = errors.New("can't detect language")
+)
+
+var (
+	enLangRe = regexp.MustCompile(`^[a-zA-Z0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
+	ruLangRe = regexp.MustCompile(`^[а-яА-ЯёЁ0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
+)
+
 type MessageHandler struct {
 	embedlog.Logger
 
@@ -24,12 +34,6 @@ type MessageHandler struct {
 	statRepo db.StatisticRepo
 	tgBot    *tgbotapi.BotAPI
 	cfg      Bot
-
-	commonHelpMsg string
-	addHelpMsg    string
-	showHelpMsg   string
-	helpHelpMsg   string
-	errMsg        string
 }
 
 func New(logger embedlog.Logger, dbc *pg.DB, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
@@ -41,54 +45,7 @@ func New(logger embedlog.Logger, dbc *pg.DB, tgBot *tgbotapi.BotAPI, cfg Bot) *M
 		statRepo: db.NewStatisticRepo(dbc),
 	}
 
-	h.initMessages()
-
 	return h
-}
-
-func (m *MessageHandler) initMessages() {
-	m.commonHelpMsg = fmt.Sprintf(
-		"Привет! Я помогу вести статистику твоих спортивных упражнений."+
-			"Ты же ведь занимаешься спортом, верно?🤔\n"+
-			"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`"+
-			"Список поддерживаемых команд: \n"+
-			"На добавление: `Сделал` или `Добавь` \n"+
-			"На показ статистики: `Покажи` \n"+
-			"Чтобы посмотреть помощь по каждой комманде, отправь: `помощь` *название команды*\n"+
-			"Например: `Помощь Добавь`",
-		m.cfg.Name,
-	)
-
-	m.addHelpMsg = fmt.Sprintf(
-		"Чтобы записать результаты, отправь команду на добавление упражнения (`сделал`). Затем, через "+
-			"пробел укажи упражнение, которое сделал. Далее через пробел укажи сделанное количество \n"+
-			"Например, ты сделал подход из 10 подтягиваний. Чтобы я всё корректно записал, напиши мне "+
-			"`@%s сделал подтягивание 10`\n"+
-			"Список доступных упражнений: `%s`",
-		m.cfg.Name,
-		exercises().String(),
-	)
-
-	m.showHelpMsg =
-		"Чтобы показать статистику, отправь команду `Покажи`. Затем укажи название упражнения." +
-			"*Можно ввести несколько, через запятую*, например, `подтягивание, отжимание`.\n" +
-			"Далее укажи период, за который ты хочешь посмотреть статистику. Период будет корректно " +
-			"распознан, если после указанных упражнений последует предлог *за*. Периодов можно указывать " +
-			"несколько через запятую. Для каждого периода нужно так же нужен предлог *за*.\n" +
-			"Например, нужно вывести статистику по подтягиваниям за сегодня, за 15.10.2022, " +
-			"за период с 01.10.2022 по 10.10.2022. Чтобы периоды обработались корректно, введи периоды" +
-			"следующим образом:\n" +
-			"`за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n" +
-			"Если период будет указан некорректно, результат будет без учёта некорректного периода. Если при " +
-			"вводе интервала дата *от* окажется больше даты *до*, они поменяются местами и результат за этот " +
-			"период будет найден корректно.\n" +
-			"В итоге корректная команда будет выглядеть следующим образом: \n" +
-			"`@%s покажи подтягивание, отжимание за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n" +
-			"Список поддерживаемых текстовых периодов: " //TODO
-
-	m.helpHelpMsg = "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь команде помощи🤔"
-
-	m.errMsg = "❌ Произошла ошибка. Попробуйте позже"
 }
 
 func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
@@ -99,60 +56,86 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 	updates := m.tgBot.GetUpdatesChan(updateConfig)
 
 	// Listen messages
-	for update := range updates {
-		if update.Message == nil {
+	for upd := range updates {
+		if upd.Message == nil {
 			continue
 		}
 
-		text, err := m.Handle(ctx, update)
+		// Проверяем, что образались вообще к нам
+		hasMention := m.hasBotMention(upd.Message.Text)
+		if !hasMention && upd.FromChat().IsGroup() {
+			continue // Скипаем, если к нам не обращались или не писали нам в личку
+		}
+
+		// Чистим текст от мусора
+		msgText := m.clearRawMsg(upd.Message.Text)
+		// Определяем язык
+		lang, err := m.detectLang(msgText)
 		if err != nil {
-			text = m.errMsg // TODO: handle better
-			m.Error(ctx, err.Error())
-		} else if text == "" {
-			continue
+			m.sendMsg(upd, "Can't detect a language😶 Please, use the only one keyboard layout chars")
 		}
 
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
-		msg.ReplyToMessageID = update.Message.MessageID
-		msg.ParseMode = m.cfg.ReplyFormat
-
-		if _, err := m.tgBot.Send(msg); err != nil {
-			// TODO: make retries
-			m.Errorf("failed to send message: %v", err)
+		// Если ничего не осталось, отправляем соответствующий ответ
+		if msgText == "" {
+			m.sendMsg(upd, messagesByLang[lang][emptyMessage])
 		}
+
+		// Достаём пользователя
+		userID := strconv.FormatInt(upd.Message.From.ID, 10)
+		text, err := m.handle(ctx, msgText, userID, lang)
+		if err != nil { // В случае ошибки сообщаем об этом
+			text = messagesByLang[lang][errMsg]
+			m.Error(ctx, "an error occurred", "message", msgText, "userID", userID, "err", err.Error()) // И логируем её
+		}
+
+		m.sendMsg(upd, text)
 	}
 }
 
-func (m *MessageHandler) Handle(ctx context.Context, upd tgbotapi.Update) (string, error) {
-	// Проверяем, что образались вообще к нам
-	hasMention := m.hasBotMention(upd.Message.Text)
-	if !hasMention && upd.FromChat().IsGroup() {
-		return "", nil // Скипаем, если к нам не обращались или не писали нам в личку
+// sendMsg Отправляет сообщение
+func (m *MessageHandler) sendMsg(upd tgbotapi.Update, text string) {
+	if text == "" {
+		return
 	}
 
-	msgText := m.clearRawMsg(upd.Message.Text)
-	// Обрабатываем, если ничего не осталось
-	if msgText == "" {
-		return "Чё?", nil
+	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, text)
+	msg.ReplyToMessageID = upd.Message.MessageID
+	msg.ParseMode = m.cfg.ReplyFormat
+	if _, err := m.tgBot.Send(msg); err != nil {
+		// TODO: make retries
+		m.Errorf("failed to send message: %v", err)
 	}
+}
 
-	userID := strconv.FormatInt(upd.Message.From.ID, 10)
-
-	switch remainedText, c := m.evaluateCmd(msgText); c {
+// handle Обрабатывает сообщение. Определяет команду и обрабатывает остальной текст в соответствии с команлой
+func (m *MessageHandler) handle(ctx context.Context, msgText, userID string, lang language) (string, error) {
+	switch remainedText, c := m.detectCmd(msgText, lang); c {
 	case addCmd:
-		return m.handleAdd(ctx, remainedText, userID)
+		return m.handleAdd(ctx, remainedText, userID, lang)
 	case showCmd:
-		return m.handleShow(ctx, remainedText, userID)
+		return m.handleShow(ctx, remainedText, userID, lang)
 	case helpCmd:
-		return m.handleHelp(remainedText)
+		return m.handleHelp(remainedText, lang)
 	default:
-		return "Не могу обработать введёную Вами команду", nil
+		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeCmd], messagesByLang[lang][listCmd], allCmdTextByLang(lang)), nil
 	}
 }
 
 // hasBotMention Проверяет, был ли бот заменшенен
 func (m *MessageHandler) hasBotMention(msgTxt string) bool {
 	return strings.Contains(msgTxt, "@"+strings.ToLower(m.cfg.Name))
+}
+
+// detectLang Определяет язык по сообщению. В текущей реализации просто смотрит, на кириллице или латиннице был текст
+func (m *MessageHandler) detectLang(msgTxt string) (language, error) {
+	switch {
+	case ruLangRe.MatchString(msgTxt):
+		return langRU, nil
+	case enLangRe.MatchString(msgTxt):
+		return langEN, nil
+	}
+
+	return "", errCantDetectLang
 }
 
 // clearRawMsg Убирает из текста вызов бота, символы пункутации, переносы строк, пробелы по краям
@@ -180,8 +163,8 @@ func (m *MessageHandler) clearRawMsg(rawMsg string) string {
 	return strings.TrimSpace(withDashes)
 }
 
-// evaluateCmd Рассчитывает, какого типа команда, строку без названия команды и саму команду
-func (m *MessageHandler) evaluateCmd(rawMsg string) (cleaned string, cmd cmd) {
+// detectCmd Рассчитывает, какого типа команда, строку без названия команды и саму команду
+func (m *MessageHandler) detectCmd(rawMsg string, lang language) (cleaned string, cmd cmd) {
 	// Берём первое слово, чтобы понять, что за команда
 	words := strings.SplitN(rawMsg, " ", 2)
 	if len(words) == 0 {
@@ -192,31 +175,31 @@ func (m *MessageHandler) evaluateCmd(rawMsg string) (cleaned string, cmd cmd) {
 		cleaned = words[1]
 	}
 
-	return cleaned, cmdByWord[strings.ToLower(words[0])]
+	return cleaned, cmdByLang[lang][strings.ToLower(words[0])]
 }
 
-func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg string, tgUserID string) (string, error) {
+func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string, lang language) (string, error) {
 	if rawMsg == "" {
-		return "Упражнение не задано", nil
+		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
 	words := strings.Split(rawMsg, " ")
-	ex, ok := exerciseByWord[words[0]]
+	ex, ok := exerciseByLang[lang][words[0]]
 	if !ok {
-		return fmt.Sprintf("Неизвестное упражнение: %s", words[0]), nil
+		return fmt.Sprintf("%s: %s. %s: %s", messagesByLang[lang][cantRecognizeEx], words[0], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
-	// Если в упражнении должн
+	// Если в упражнении должно быть задано количество
 	if ex.mustHaveCnt() {
 		if len(words) <= 1 {
-			return fmt.Sprintf("Для упражнения `%s` должно быть указано количество повторений", words[0]), nil
+			return messagesByLang[lang][cntRequired], nil
 		}
 
 		cnt, err := strconv.ParseFloat(words[1], 64)
 		if err != nil {
-			return fmt.Sprintf("Указано некорректное количество повторений: %s", words[1]), nil //nolint:nilerr
+			return fmt.Sprintf("%s: %s", messagesByLang[lang][cntInvalid], words[1]), nil //nolint:nilerr
 		} else if cnt < 1 {
-			return "Количество повторений должно быть от 1 и более", nil
+			return messagesByLang[lang][cntGE], nil
 		}
 
 		_, err = m.statRepo.AddStatistic(ctx, &db.Statistic{
@@ -231,16 +214,16 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg string, tgUserID 
 		}
 	}
 
-	return "Добавлено ✅", nil
+	return messagesByLang[lang][exAdded], nil
 }
 
-func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID string) (res string, err error) {
+func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string, lang language) (res string, err error) {
 	if rawMsg == "" {
-		return "Упражнение не задано", nil
+		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
 	// Удаляем ненужный предлог
-	rawMsg = strings.ReplaceAll(rawMsg, " за", "")
+	rawMsg = m.clearFromTo(rawMsg, lang)
 	// Разбиваем по пробелам
 	words := strings.Split(rawMsg, " ")
 
@@ -251,17 +234,18 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 
 	// Идём по каждому слову и ищем упражнения, который надо достать до первого фейла
 	for i = range words {
-		if textContainsAllExerciseWords(words[i]) {
+		if textContainsAllExerciseWords(words[i], lang) {
 			i++ // Пропускаем это слово, фильтр будет пустой, значит вытащим и так всё
 			break
 		}
 
-		ex, ok := exerciseByWord[words[i]]
+		ex, ok := exerciseByLang[lang][words[i]]
 		if !ok { // Если не распознано, мы наверное дошли до интервала, остановимся
 			break
 		}
 
 		exrs = append(exrs, ex)
+		i++ // Сдвигаем на 1 для остатка слов
 	}
 
 	var (
@@ -272,21 +256,22 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 	// Смотрим, есть ли кусок фразы про весь период в тексте.
 	// Если нет, то парсим каждый период.
 	// Если да, или если не задан, то считаем, что нужно взять за всё время.
-	if len(words[i:]) > 0 {
+	periodWords := words[i:]
+	if len(periodWords) > 0 {
 		// Слепим оставшуюся подстроку под период
-		periodLeftPart := strings.Join(words[i:], " ")
+		periodLeftPart := strings.Join(periodWords, " ")
 		// Если в ней нет спец фразы для всех упражнений
-		if !textContainsAllPeriodWords(periodLeftPart) {
+		if !textContainsAllPeriodWords(periodLeftPart, lang) {
 			var invPeriods []string
 			// То идём парсить каждый элеент
-			periodsFilter, invPeriods = m.prepareCorrectAndInvalidPeriods(words[i:])
+			periodsFilter, invPeriods = m.prepareCorrectAndInvalidPeriods(periodWords, lang)
 			invText = strings.Join(invPeriods, ", ")
 		}
 	}
 
 	// Сразу добавляем в результат нераспознаные периоды
 	if invText != "" {
-		res += fmt.Sprintf("Нераспознаные периоды: %s\n", invText)
+		res += fmt.Sprintf("%s: %s\n", messagesByLang[lang][periodsInvalid], invText)
 	}
 
 	// Теперь идём за статистикой
@@ -304,10 +289,10 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 
 	// Если ничего нет, выходим
 	if len(stats) == 0 {
-		return res + "Ничего не найдено 😢", nil
+		return res + messagesByLang[lang][nothingFound], nil
 	}
 
-	table, err := m.buildTableByStat(stats)
+	table, err := m.buildTableByStat(stats, lang)
 	if err != nil {
 		return "", fmt.Errorf("build table by stat, err=%w", err)
 	}
@@ -317,16 +302,25 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg string, tgUserID
 	return res, nil
 }
 
-func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string) (res periods, invalid []string) {
+func (m *MessageHandler) clearFromTo(in string, lang language) string {
+	for _, s := range cleanByLang[lang] {
+		if strings.Contains(in, s) {
+			in = strings.ReplaceAll(in, strings.TrimRight(s, " "), "")
+		}
+	}
+
+	return in
+}
+
+func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string, lang language) (res periods, invalid []string) {
 	// Проходимся по каждому периоду
 	for i := range periods {
 		// Если он текстовый
-		reWords := regexp.MustCompile(`^[а-яА-ЯёЁ]+$`)
-		isText := reWords.MatchString(periods[i])
+		isText := m.langReByLang(lang).MatchString(periods[i])
 
 		// То обработаем, попробуем взять интервалы из текста
 		if isText {
-			p, ok := m.periodByText(periods[i], time.Now())
+			p, ok := m.periodByText(periods[i], time.Now(), lang)
 			if ok { // Если получилось, добавляем в результат
 				res = append(res, p)
 				continue
@@ -348,8 +342,20 @@ func (m *MessageHandler) prepareCorrectAndInvalidPeriods(periods []string) (res 
 	return
 }
 
-func (m *MessageHandler) periodByText(text string, now time.Time) (p period, ok bool) {
-	switch periodByWord[text] {
+// langReByLang Возвращает регулярку для проверки фразы, что она состоит только из букв в текущем языке
+func (m *MessageHandler) langReByLang(lang language) *regexp.Regexp {
+	switch lang {
+	case langRU:
+		return regexp.MustCompile(`^[а-яА-ЯёЁ]+$`)
+	case langEN:
+		return regexp.MustCompile(`^[a-zA-Z]+$`)
+	}
+
+	return nil
+}
+
+func (m *MessageHandler) periodByText(text string, now time.Time, lang language) (p period, ok bool) {
+	switch periodByLang[lang][text] {
 	case todayPeriod:
 		p = period{
 			from: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC),
@@ -449,22 +455,23 @@ func (m *MessageHandler) parseDate(date string) (time.Time, error) {
 	return parsed, nil
 }
 
-func (m *MessageHandler) buildTableByStat(in []db.GroupedStatistic) (string, error) {
+func (m *MessageHandler) buildTableByStat(in []db.GroupedStatistic, lang language) (string, error) {
 	if len(in) == 0 {
 		return "", nil
 	}
 
-	const tmpl = "" +
-		"упражнение\tкол-во\tподходы\n" +
-		"{{ range .Stat }}" +
-		"{{ .Exercise }}\t{{ .SumCount }}\t{{ .Sets }}\n" +
-		"{{ end }}"
+	tmpl := fmt.Sprintf(""+
+		"%s\t%s\t%s\n"+
+		"{{ range .Stat }}"+
+		"{{ .TranslatedExercise }}\t{{ .SumCount }}\t{{ .Sets }}\n"+
+		"{{ end }}", messagesByLang[lang][tableExCol], messagesByLang[lang][tableCntCol], messagesByLang[lang][tableSetCol],
+	)
 
 	type Data struct {
-		Stat []db.GroupedStatistic
+		Stat []GroupedStatistic
 	}
 
-	return tableFromTemplate("feedTrafficDeviations", tmpl, Data{Stat: in})
+	return tableFromTemplate("feedTrafficDeviations", tmpl, Data{Stat: NewGroupedStatisticList(in, lang)})
 }
 
 func tableFromTemplate(name, tmpl string, data interface{}) (string, error) {
@@ -488,17 +495,19 @@ func tableFromTemplate(name, tmpl string, data interface{}) (string, error) {
 	return b.String(), nil
 }
 
-func (m *MessageHandler) handleHelp(rawMsg string) (string, error) {
-	switch _, c := m.evaluateCmd(rawMsg); c {
+func (m *MessageHandler) handleHelp(rawMsg string, lang language) (string, error) {
+	switch _, c := m.detectCmd(rawMsg, lang); c {
 	case unknownCmd:
-		return m.commonHelpMsg, nil
+		return fmt.Sprintf(messagesByLang[lang][commonHelpMsg], m.cfg.Name), nil
 	case addCmd:
-		return m.addHelpMsg, nil
+		return fmt.Sprintf(messagesByLang[lang][addHelpMsg], m.cfg.Name) +
+			fmt.Sprintf("%s: `%s`", messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	case showCmd:
-		return m.showHelpMsg, nil
+		return fmt.Sprintf(messagesByLang[lang][showHelpMsg], m.cfg.Name) +
+			fmt.Sprintf("%s: %s", messagesByLang[lang][listPeriod], allPeriodsByLang(lang)), nil
 	case helpCmd:
-		return m.helpHelpMsg, nil
+		return messagesByLang[lang][helpHelpMsg], nil
 	default:
-		return fmt.Sprintf("Команда `%s` не поддерживается", rawMsg), nil
+		return fmt.Sprintf("`%s` %s", rawMsg, messagesByLang[lang][cmdNotSupported]), nil
 	}
 }

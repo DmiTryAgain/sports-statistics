@@ -17,5 +17,20 @@ CREATE TABLE "statistics" (
                               PRIMARY KEY("statisticId")
 );
 
+drop index if exists "statistics_partitioned_statusId";
+drop index if exists  "statistics_partitioned_createdAt";
+drop index if exists "statistics_partitioned_tgUserId";
+drop index if exists "statistics_partitioned_exercise";
 
+create index "statistics_partitioned_statusId"
+    on statistics ("statusId");
+
+create index "statistics_partitioned_createdAt"
+    on statistics ("createdAt");
+
+create index "statistics_partitioned_tgUserId"
+    on statistics ("tgUserId");
+
+create index "statistics_partitioned_exercise"
+    on statistics ("exercise");
 
