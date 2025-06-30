@@ -12,7 +12,7 @@ build:
 
 run:
 	@echo "Compiling"
-	@go run $(GOFLAGS) $(MAIN) -config=config/local.toml -dev > app.log 2>app.err.log
+	@go run $(GOFLAGS) $(MAIN) -config=config/local.toml -dev
 
 test:
 	@go test -v ./...

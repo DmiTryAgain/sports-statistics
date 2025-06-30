@@ -149,21 +149,21 @@ func (m *MessageHandler) clearRawMsg(rawMsg string) string {
 	// Убираем название бота
 	withoutMention := strings.ReplaceAll(rawMsg, "@"+strings.ToLower(m.cfg.Name), "")
 
-	// Заменяем все отступы и переносы строк на одиночный пробел
-	reSpaces := regexp.MustCompile(`\s+`)
-	withoutSpaces := reSpaces.ReplaceAllString(withoutMention, " ")
-
 	const dashPlaceHolder = "DASHPLACEHOLDER"
 	// Делаем специальный плейсхолдер с тире, чтобы не удалить лишние тире
 	reHyphen := regexp.MustCompile(`(\d)\s*-\s*(\d)`)
-	withPlacehoder := reHyphen.ReplaceAllString(withoutSpaces, fmt.Sprintf("${1}%s${2}", dashPlaceHolder))
+	withPlacehoder := reHyphen.ReplaceAllString(withoutMention, fmt.Sprintf("${1}%s${2}", dashPlaceHolder))
 
 	// Убираем символы пунктуации
 	rePunct := regexp.MustCompile(`[[:punct:]]`)
 	withoutPuncts := rePunct.ReplaceAllString(withPlacehoder, "")
 
+	// Заменяем все отступы и переносы строк на одиночный пробел
+	reSpaces := regexp.MustCompile(`\s+`)
+	withoutSpaces := reSpaces.ReplaceAllString(withoutPuncts, " ")
+
 	// Теперь возвращаем тире обратно на место плейсхолдера
-	withDashes := strings.ReplaceAll(withoutPuncts, dashPlaceHolder, "-")
+	withDashes := strings.ReplaceAll(withoutSpaces, dashPlaceHolder, "-")
 
 	// Убираем пробелы по краям и возвращаем
 	return strings.TrimSpace(withDashes)
@@ -258,6 +258,11 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 
 		exrs = append(exrs, ex)
 		i++ // Сдвигаем на 1 для остатка слов
+	}
+
+	// Проверяем, если вышли, и не нашли ни одного упражнения
+	if len(exrs) == 0 && i == 0 {
+		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
 	var (
