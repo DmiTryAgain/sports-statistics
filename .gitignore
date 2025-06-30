@@ -22,3 +22,5 @@ config/local.toml
 
 sportstat
 
+app.log
+app.err.log
