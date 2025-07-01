@@ -666,19 +666,19 @@ var (
 			tableExCol:       "упражнение",
 			tableCntCol:      "кол-во",
 			tableSetCol:      "подходы",
-			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений." +
+			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
 				"Ты же ведь занимаешься спортом, верно?🤔\n" +
-				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`" +
-				"Список поддерживаемых команд: \n" +
-				"На добавление: `Сделал` или `Добавь` \n" +
-				"На показ статистики: `Покажи` \n" +
+				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n" +
+				"Список поддерживаемых команд:\n" +
+				"На добавление: `Сделал` или `Добавь`\n" +
+				"На показ статистики: `Покажи`\n" +
 				"Чтобы посмотреть помощь по каждой комманде, отправь: `помощь` *название команды*\n" +
 				"Например: `Помощь Добавь`",
 			addHelpMsg: "Чтобы записать результаты, напиши ключевое слово (команду) на добавление упражнения `сделал`. Затем, через " +
 				"пробел укажи выполненное упражнение. Далее укажи сделанное количество.\n" +
-				"Например, ты подтянулся 10 раз. Чтобы я всё корректно записал, напиши мне: " +
-				"`@%s сделал подтягивание 10`\n",
-			showHelpMsg: "Чтобы показать статистику, напиши ключевое слово (команду) `Покажи`. Затем укажи упражнение." +
+				"Например, ты подтянулся 10 раз. Чтобы я всё корректно записал, напиши мне:\n" +
+				"`@%s сделал подтягивание 10`",
+			showHelpMsg: "Чтобы показать статистику, напиши ключевое слово (команду) `Покажи`. Затем укажи упражнение.\n" +
 				"*Можно ввести несколько, через запятую*, например, `подтягивание, отжимание`.\n" +
 				"Далее укажи период, за который ты хочешь посмотреть статистику. Периодов можно указывать " +
 				"несколько через используя пробелы.\n" +
@@ -712,9 +712,9 @@ var (
 			tableExCol:       "exercise",
 			tableCntCol:      "reps",
 			tableSetCol:      "sets",
-			commonHelpMsg: "Hi there! I can keep your training statistic." +
+			commonHelpMsg: "Hi there! I can keep your training statistic.\n" +
 				"You do sports, right?🤔\n" +
-				"Write me direct messages. Mention me in groups like this: `@%s`" +
+				"Write me direct messages. Mention me in groups like this: `@%s`\n" +
 				"List supported commands: \n" +
 				"To add: `Add` or `Store` \n" +
 				"To show statistic: `Show` \n" +
@@ -722,8 +722,8 @@ var (
 				"For instance: `Help add`",
 			addHelpMsg: "To write statistic, write a message with key word (command) `add`. Then using spaces" +
 				"write an exercise you done. Then write done reps. \n" +
-				"For instance, you did 10 pull-ups. To store it correctly, write me " +
-				"`@%s add push-ups 10`\n",
+				"For instance, you did 10 pull-ups. To store it correctly, write me\n" +
+				"`@%s add push-ups 10`",
 			showHelpMsg: "Write `Show` to show statistic, then write an exercise.\n" +
 				"*you can write some exercises using spaces*, e.g. `pull-ups, push-ups`.\n" +
 				"Then write a period you want to show a statistic. You can write some periods using spaces.\n " +
@@ -733,7 +733,7 @@ var (
 				"A wrong period will be ignored and printed." +
 				"If you write an interval where *from* date later than *to* date, they will swap places and the result" +
 				"will be found correctly." +
-				"The full correct example is below: \n" +
+				"The full correct example is below:\n" +
 				"`@%s show push-ups, pull-ups for today, for 15.10.2022, 01.10.2022-10.10.2022`\n",
 			helpHelpMsg: "Help for the help command is not provided. How did you guess to ask help to help command?🤔",
 			errMsg:      "❌ An error occurred. Try again later",
