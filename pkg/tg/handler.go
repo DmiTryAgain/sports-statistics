@@ -473,7 +473,10 @@ func (m *MessageHandler) periodByTime(ctx context.Context, interval string) (p p
 			return period{}, []string{intervals[0]}
 		}
 
-		return period{from: t, to: t}, nil
+		return period{
+			from: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC),   // С начала дня
+			to:   time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC), // До следующего дня (т.к. до - не включительно)
+		}, nil
 	}
 
 	// Если даты две
@@ -495,7 +498,10 @@ func (m *MessageHandler) periodByTime(ctx context.Context, interval string) (p p
 			from, to = to, from
 		}
 
-		return period{from: from, to: to}, invalid
+		return period{
+			from: time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC), // С начала дня
+			to:   time.Date(to.Year(), to.Month(), to.Day()+1, 0, 0, 0, 0, time.UTC),     // До следующего дня (т.к. до - не включительно)
+		}, invalid
 	}
 
 	return period{}, []string{interval}
