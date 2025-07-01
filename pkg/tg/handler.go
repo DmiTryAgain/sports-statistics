@@ -62,7 +62,7 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 		}
 
 		lowerText := strings.ToLower(upd.Message.Text)
-		// Проверяем, что образались вообще к нам
+		// Проверяем, что обращались вообще к нам
 		hasMention := m.hasBotMention(lowerText)
 		if !hasMention && upd.FromChat().IsGroup() {
 			continue // Скипаем, если к нам не обращались или не писали нам в личку
@@ -190,23 +190,44 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string,
 		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
+	var i int // Нужно для того, чтобы понять, где заканчиваются слова упражнений
 	words := strings.Split(rawMsg, " ")
-	ex, ok := exerciseByLang[lang][words[0]]
+	ex, ok := exerciseByLang[lang][words[i]]
 	if !ok {
 		m.Print(ctx, "received unknown exercise", "msg", rawMsg, "userID", tgUserID, "exercise", words[0])
 		return fmt.Sprintf("%s: %s. %s: %s", messagesByLang[lang][cantRecognizeEx], words[0], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
+	// Проверим, что тут могло быть упражнение из нескольких слов
+	multiwordExName := words[i]
+	for len(words) > i+1 {
+		multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[i+1])
+		multiwordEx, exists := exerciseByLang[lang][multiwordExName]
+		if !exists { // Если не распознано, мы наверное дошли до интервала, остановимся
+			break
+		}
+
+		// Если оно реально состоит из 2х слов, снова сдвигаем i на следующее слово
+		if ex == multiwordEx {
+			i++
+			continue
+		}
+
+		// Останавливаемся, если упражнения различаются. Мы захватили уже следующее
+		break
+	}
+	i++ // Нам нужно начать со следующего слова после упражнения
+
 	// Если в упражнении должно быть задано количество
 	if ex.mustHaveCnt() {
-		if len(words) <= 1 {
+		if len(words[i:]) < 1 { // Проверяем, что слова вообще остались после упражнений
 			m.Print(ctx, "exercise must have count", "msg", rawMsg, "userID", tgUserID, "exercise", ex)
 			return messagesByLang[lang][cntRequired], nil
 		}
 
-		cnt, err := strconv.ParseFloat(words[1], 64)
+		cnt, err := strconv.ParseFloat(words[i], 64)
 		if err != nil {
-			return fmt.Sprintf("%s: %s", messagesByLang[lang][cntInvalid], words[1]), nil //nolint:nilerr
+			return fmt.Sprintf("%s: %s", messagesByLang[lang][cntInvalid], words[i]), nil //nolint:nilerr
 		} else if cnt < 1 {
 			m.Print(ctx, "invalid exercise count", "msg", rawMsg, "userID", tgUserID, "count", cnt)
 			return messagesByLang[lang][cntGE], nil
@@ -244,7 +265,7 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 	)
 
 	// Идём по каждому слову и ищем упражнения, который надо достать до первого фейла
-	for i = range words {
+	for i < len(words) {
 		if textContainsAllExerciseWords(words[i], lang) {
 			m.Print(ctx, "the message contains all exercises", "msg", rawMsg, "userID", tgUserID, "all exercises word", words[i])
 			i++ // Пропускаем это слово, фильтр будет пустой, значит вытащим и так всё
@@ -255,9 +276,27 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 		if !ok { // Если не распознано, мы наверное дошли до интервала, остановимся
 			break
 		}
+		// Если слова ещё не закончились, проверим, что тут могло быть упражнение из нескольких слов
+		multiwordExName := words[i]
+		for len(words) > i+1 {
+			multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[i+1])
+			multiwordEx, exists := exerciseByLang[lang][multiwordExName]
+			if !exists { // Если не распознано, мы наверное дошли до интервала, остановимся
+				break
+			}
+
+			// Если оно реально состоит из 2х слов, снова сдвигаем i на следующее слово
+			if ex == multiwordEx {
+				i++
+				continue
+			}
+
+			// Останавливаемся, если упражнения различаются. Мы захватили уже следующее
+			break
+		}
 
 		exrs = append(exrs, ex)
-		i++ // Сдвигаем на 1 для остатка слов
+		i++ // Сдвигаем на следующее слово после текущего упражнения
 	}
 
 	// Проверяем, если вышли, и не нашли ни одного упражнения
