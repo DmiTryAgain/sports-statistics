@@ -16,13 +16,13 @@ type App struct {
 	embedlog.Logger
 
 	cfg     tg.Config
-	db      db.DB
-	dbc     *pg.DB
+	dbc     db.DB
+	dbconn  *pg.DB
 	tgBot   *tgbotapi.BotAPI
 	handler *tg.MessageHandler
 }
 
-func New(lg embedlog.Logger, db db.DB, dbc *pg.DB, cfg tg.Config) (*App, error) {
+func New(lg embedlog.Logger, dbc db.DB, dbconn *pg.DB, cfg tg.Config) (*App, error) {
 	// create tg bot
 	bot, err := tgbotapi.NewBotAPI(cfg.Bot.Token)
 	if err != nil {
@@ -33,12 +33,12 @@ func New(lg embedlog.Logger, db db.DB, dbc *pg.DB, cfg tg.Config) (*App, error) 
 	a := &App{
 		Logger: lg,
 		cfg:    cfg,
-		db:     db,
 		dbc:    dbc,
+		dbconn: dbconn,
 		tgBot:  bot,
 	}
 
-	a.handler = tg.New(a.Logger, a.dbc, bot, a.cfg.Bot)
+	a.handler = tg.New(a.Logger, a.dbc, db.NewStatisticRepo(dbconn), bot, a.cfg.Bot)
 
 	return a, nil
 }

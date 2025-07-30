@@ -167,6 +167,12 @@ var (
 			"патягиваня":   pullUpEx,
 			"подтянулся":   pullUpEx,
 			"падтянулся":   pullUpEx,
+			"патягивания":  pullUpEx,
+			"потягивания":  pullUpEx,
+			"потягевания":  pullUpEx,
+			"патягевания":  pullUpEx,
+			"патягеваня":   pullUpEx,
+			"потягеваня":   pullUpEx,
 
 			// muscleUpEx
 			"выход":        muscleUpEx,
@@ -318,15 +324,10 @@ var (
 			//	pullUpEx
 			"pull":      pullUpEx,
 			"pulls":     pullUpEx,
-			"pull-up":   pullUpEx,
-			"pulls-up":  pullUpEx,
-			"pull-ups":  pullUpEx,
 			"pullup":    pullUpEx,
 			"pullups":   pullUpEx,
 			"pull up":   pullUpEx,
 			"pull ups":  pullUpEx,
-			"chin-up":   pullUpEx,
-			"chin-ups":  pullUpEx,
 			"chinup":    pullUpEx,
 			"chinups":   pullUpEx,
 			"chin up":   pullUpEx,
@@ -780,17 +781,17 @@ var (
 		},
 	}
 
-	cleanByLang = map[language][]string{
+	prepositionByLang = map[language]map[string]struct{}{
 		langRU: {
-			" за ",
-			" с ",
-			" по ",
-			" до ",
+			"за": struct{}{},
+			"с":  struct{}{},
+			"по": struct{}{},
+			"до": struct{}{},
 		},
 		langEN: {
-			" from ",
-			" for ",
-			" to ",
+			"from": struct{}{},
+			"for":  struct{}{},
+			"to":   struct{}{},
 		},
 	}
 )

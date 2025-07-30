@@ -23,6 +23,11 @@ func (e Exercise) isAll() bool {
 	return e == allEx
 }
 
+func (e Exercise) isZero() bool {
+	var def Exercise
+	return e == def
+}
+
 // TODO: implement later
 //func (e Exercise) hasDistance() bool {
 //	_, ok := hasDistance[e]
