@@ -13,13 +13,13 @@ import (
 
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 
-	"github.com/go-pg/pg/v10"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/vmkteam/embedlog"
 )
 
 var (
-	errCantDetectLang = errors.New("can't detect language")
+	errCantDetectLang  = errors.New("can't detect language")
+	errCantRecognizeEx = errors.New("can't recognize the exercise")
 )
 
 var (
@@ -30,19 +30,19 @@ var (
 type MessageHandler struct {
 	embedlog.Logger
 
-	dbc      *pg.DB
+	dbc      db.DB
 	statRepo db.StatisticRepo
 	tgBot    *tgbotapi.BotAPI
 	cfg      Bot
 }
 
-func New(logger embedlog.Logger, dbc *pg.DB, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
+func New(logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
 	h := &MessageHandler{
 		Logger:   logger,
-		dbc:      dbc,
+		dbc:      db,
 		cfg:      cfg,
 		tgBot:    tgBot,
-		statRepo: db.NewStatisticRepo(dbc),
+		statRepo: statRepo,
 	}
 
 	return h
@@ -55,45 +55,52 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 	// Get updates chan to listen to them
 	updates := m.tgBot.GetUpdatesChan(updateConfig)
 
+	limit := make(chan struct{}, 100)
 	// Listen messages
 	for upd := range updates {
-		if upd.Message == nil {
-			continue
-		}
+		limit <- struct{}{} // Для каждого апдейта заполняем канал
 
-		lowerText := strings.ToLower(upd.Message.Text)
-		// Проверяем, что обращались вообще к нам
-		hasMention := m.hasBotMention(lowerText)
-		if !hasMention && upd.FromChat().IsGroup() {
-			continue // Скипаем, если к нам не обращались или не писали нам в личку
-		}
+		go func() {
+			defer func() { <-limit }() // Освобождаем канал после успешного завершения горутины
 
-		// Достаём пользователя
-		userID := strconv.FormatInt(upd.Message.From.ID, 10)
-		// Чистим текст от мусора
-		msgText := m.clearRawMsg(lowerText)
-		// Определяем язык
-		lang, err := m.detectLang(msgText)
-		if err != nil {
-			m.Print(ctx, err.Error(), "msg", msgText, "userID", userID)
-			m.sendMsg(upd, "Can't detect a language😶 Please, use the only one keyboard layout chars")
-			continue
-		}
+			if upd.Message == nil {
+				return
+			}
 
-		// Если ничего не осталось, отправляем соответствующий ответ
-		if msgText == "" {
-			m.Print(ctx, "received empty message", "rawMsg", upd.Message.Text, "userID", userID)
-			m.sendMsg(upd, messagesByLang[lang][emptyMessage])
-			continue
-		}
+			lowerText := strings.ToLower(upd.Message.Text)
+			// Проверяем, что обращались вообще к нам
+			hasMention := m.hasBotMention(lowerText)
+			if !hasMention && upd.FromChat().IsGroup() {
+				return // Скипаем, если к нам не обращались или не писали нам в личку
+			}
 
-		text, err := m.handle(ctx, msgText, userID, lang)
-		if err != nil { // В случае ошибки сообщаем об этом
-			text = messagesByLang[lang][errMsg]
-			m.Error(ctx, "an error occurred", "rawMsg", upd.Message.Text, "userID", userID, "err", err.Error()) // И логируем её
-		}
+			// Достаём пользователя
+			userID := strconv.FormatInt(upd.Message.From.ID, 10)
+			// Чистим текст от мусора
+			msgText := m.clearRawMsg(lowerText)
+			// Определяем язык
+			lang, err := m.detectLang(msgText)
+			if err != nil {
+				m.Print(ctx, err.Error(), "msg", msgText, "userID", userID)
+				m.sendMsg(upd, "Can't detect a language😶 Please, use the only one keyboard layout chars")
+				return
+			}
 
-		m.sendMsg(upd, text)
+			// Если ничего не осталось, отправляем соответствующий ответ
+			if msgText == "" {
+				m.Print(ctx, "received empty message", "rawMsg", upd.Message.Text, "userID", userID)
+				m.sendMsg(upd, messagesByLang[lang][emptyMessage])
+				return
+			}
+
+			text, err := m.handle(ctx, msgText, userID, lang)
+			if err != nil { // В случае ошибки сообщаем об этом
+				text = messagesByLang[lang][errMsg]
+				m.Error(ctx, "an error occurred", "rawMsg", upd.Message.Text, "userID", userID, "err", err.Error()) // И логируем её
+			}
+
+			m.sendMsg(upd, text)
+		}()
 	}
 }
 
@@ -152,11 +159,21 @@ func (m *MessageHandler) clearRawMsg(rawMsg string) string {
 	const dashPlaceHolder = "DASHPLACEHOLDER"
 	// Делаем специальный плейсхолдер с тире, чтобы не удалить лишние тире
 	reHyphen := regexp.MustCompile(`(\d)\s*-\s*(\d)`)
-	withPlacehoder := reHyphen.ReplaceAllString(withoutMention, fmt.Sprintf("${1}%s${2}", dashPlaceHolder))
+	withPlaceHoder := reHyphen.ReplaceAllString(withoutMention, fmt.Sprintf("${1}%s${2}", dashPlaceHolder))
+
+	const dotPlaceHolder = "DOTPLACEHOLDER"
+
+	// Protect dots in dates (mark them temporary)
+	reDateDot := regexp.MustCompile(`(\d{2})\.(\d{2})\.(\d{2}|\d{4})`)
+	withPlaceHoder = reDateDot.ReplaceAllString(withPlaceHoder, fmt.Sprintf("${1}%s${2}%s${3}", dotPlaceHolder, dotPlaceHolder))
+
+	// Replace dots in floats (exclude dates)
+	reFloatDot := regexp.MustCompile(`(\d)\.(\d)`)
+	withPlaceHoder = reFloatDot.ReplaceAllString(withPlaceHoder, fmt.Sprintf("${1}%s${2}", dotPlaceHolder))
 
 	// Убираем символы пунктуации
 	rePunct := regexp.MustCompile(`[[:punct:]]`)
-	withoutPuncts := rePunct.ReplaceAllString(withPlacehoder, "")
+	withoutPuncts := rePunct.ReplaceAllString(withPlaceHoder, "")
 
 	// Заменяем все отступы и переносы строк на одиночный пробел
 	reSpaces := regexp.MustCompile(`\s+`)
@@ -165,8 +182,11 @@ func (m *MessageHandler) clearRawMsg(rawMsg string) string {
 	// Теперь возвращаем тире обратно на место плейсхолдера
 	withDashes := strings.ReplaceAll(withoutSpaces, dashPlaceHolder, "-")
 
+	// Возвращаем точки обратно для дробных значений
+	withDots := strings.ReplaceAll(withDashes, dotPlaceHolder, ".")
+
 	// Убираем пробелы по краям и возвращаем
-	return strings.TrimSpace(withDashes)
+	return strings.TrimSpace(withDots)
 }
 
 // detectCmd Рассчитывает, какого типа команда, строку без названия команды и саму команду
@@ -185,51 +205,34 @@ func (m *MessageHandler) detectCmd(rawMsg string, lang language) (cleaned string
 }
 
 func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string, lang language) (string, error) {
+	lg := m.With("msg", rawMsg, "userID", tgUserID)
 	if rawMsg == "" {
-		m.Print(ctx, "received empty message", "msg", rawMsg, "userID", tgUserID)
+		lg.Print(ctx, "received empty message")
 		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
-	var i int // Нужно для того, чтобы понять, где заканчиваются слова упражнений
 	words := strings.Split(rawMsg, " ")
-	ex, ok := exerciseByLang[lang][words[i]]
-	if !ok {
-		m.Print(ctx, "received unknown exercise", "msg", rawMsg, "userID", tgUserID, "exercise", words[0])
+
+	// Достаём упражнение
+	ex, found, position := m.extractExerciseAndItsPosition(words, lang)
+	if !found {
+		lg.Print(ctx, "received unknown exercise", "exercise", words[0])
 		return fmt.Sprintf("%s: %s. %s: %s", messagesByLang[lang][cantRecognizeEx], words[0], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
-	// Проверим, что тут могло быть упражнение из нескольких слов
-	multiwordExName := words[i]
-	for len(words) > i+1 {
-		multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[i+1])
-		multiwordEx, exists := exerciseByLang[lang][multiwordExName]
-		if !exists { // Если не распознано, мы наверное дошли до интервала, остановимся
-			break
-		}
-
-		// Если оно реально состоит из 2х слов, снова сдвигаем i на следующее слово
-		if ex == multiwordEx {
-			i++
-			continue
-		}
-
-		// Останавливаемся, если упражнения различаются. Мы захватили уже следующее
-		break
-	}
-	i++ // Нам нужно начать со следующего слова после упражнения
-
+	position++ // Нужно продолжить со следующего слова
 	// Если в упражнении должно быть задано количество
 	if ex.mustHaveCnt() {
-		if len(words[i:]) < 1 { // Проверяем, что слова вообще остались после упражнений
-			m.Print(ctx, "exercise must have count", "msg", rawMsg, "userID", tgUserID, "exercise", ex)
+		if len(words[position:]) < 1 { // Проверяем, что слова вообще остались после упражнений
+			lg.Print(ctx, "exercise must have count", "exercise", ex)
 			return messagesByLang[lang][cntRequired], nil
 		}
 
-		cnt, err := strconv.ParseFloat(words[i], 64)
+		cnt, err := strconv.ParseFloat(words[position], 64)
 		if err != nil {
-			return fmt.Sprintf("%s: %s", messagesByLang[lang][cntInvalid], words[i]), nil //nolint:nilerr
+			return fmt.Sprintf("%s: %s", messagesByLang[lang][cntInvalid], words[position]), nil //nolint:nilerr
 		} else if cnt < 1 {
-			m.Print(ctx, "invalid exercise count", "msg", rawMsg, "userID", tgUserID, "count", cnt)
+			lg.Print(ctx, "invalid exercise count", "count", cnt)
 			return messagesByLang[lang][cntGE], nil
 		}
 
@@ -254,87 +257,26 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
-	// Удаляем ненужный предлог
-	rawMsg = m.clearFromTo(rawMsg, lang)
-	// Разбиваем по пробелам
-	words := strings.Split(rawMsg, " ")
-
-	var (
-		exrs Exercises // Сюда запишем список упражнений, по которым надо будет фильтрануть
-		i    int       // Здесь запомним, на каком элементе выйдем из цикла
-	)
-
-	// Идём по каждому слову и ищем упражнения, который надо достать до первого фейла
-	for i < len(words) {
-		if textContainsAllExerciseWords(words[i], lang) {
-			m.Print(ctx, "the message contains all exercises", "msg", rawMsg, "userID", tgUserID, "all exercises word", words[i])
-			i++ // Пропускаем это слово, фильтр будет пустой, значит вытащим и так всё
-			break
+	// Парсим текст, находим упражнения и период
+	exercises, periodsFilter, invPeriods, err := m.parseRawMsgAsExercisesAndPeriods(ctx, rawMsg, lang)
+	if err != nil {
+		if errors.Is(err, errCantRecognizeEx) {
+			return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 		}
 
-		ex, ok := exerciseByLang[lang][words[i]]
-		if !ok { // Если не распознано, мы наверное дошли до интервала, остановимся
-			break
-		}
-		// Если слова ещё не закончились, проверим, что тут могло быть упражнение из нескольких слов
-		multiwordExName := words[i]
-		for len(words) > i+1 {
-			multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[i+1])
-			multiwordEx, exists := exerciseByLang[lang][multiwordExName]
-			if !exists { // Если не распознано, мы наверное дошли до интервала, остановимся
-				break
-			}
-
-			// Если оно реально состоит из 2х слов, снова сдвигаем i на следующее слово
-			if ex == multiwordEx {
-				i++
-				continue
-			}
-
-			// Останавливаемся, если упражнения различаются. Мы захватили уже следующее
-			break
-		}
-
-		exrs = append(exrs, ex)
-		i++ // Сдвигаем на следующее слово после текущего упражнения
-	}
-
-	// Проверяем, если вышли, и не нашли ни одного упражнения
-	if len(exrs) == 0 && i == 0 {
-		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
-	}
-
-	var (
-		periodsFilter periods
-		invText       string
-	)
-
-	// Смотрим, есть ли кусок фразы про весь период в тексте.
-	// Если нет, то парсим каждый период.
-	// Если да, или если не задан, то считаем, что нужно взять за всё время.
-	periodWords := words[i:]
-	if len(periodWords) > 0 {
-		// Слепим оставшуюся подстроку под период
-		periodLeftPart := strings.Join(periodWords, " ")
-		// Если в ней нет спец фразы для всех упражнений
-		if !textContainsAllPeriodWords(periodLeftPart, lang) {
-			var invPeriods []string
-			// То идём парсить каждый элеент
-			periodsFilter, invPeriods = m.prepareCorrectAndInvalidPeriods(ctx, periodWords, lang)
-			invText = strings.Join(invPeriods, ", ")
-		}
+		return "", fmt.Errorf("parse raw message as exercises and periods, rawMsg=%s, err=%w", rawMsg, err)
 	}
 
 	// Сразу добавляем в результат нераспознаные периоды
-	if invText != "" {
-		res += fmt.Sprintf("%s: %s\n", messagesByLang[lang][periodsInvalid], invText)
+	if len(invPeriods) != 0 {
+		res += fmt.Sprintf("%s: %s\n", messagesByLang[lang][periodsInvalid], strings.Join(invPeriods, ", "))
 	}
 
 	// Теперь идём за статистикой
 	s := db.GroupedStatisticSearch{
 		StatisticSearch: db.StatisticSearch{
 			TgUserID:  &tgUserID,
-			Exercises: exrs.StringSlice(),
+			Exercises: exercises.StringSlice(),
 		},
 		Periods: periodsFilter.ToDB(),
 	}
@@ -358,38 +300,128 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 	return res, nil
 }
 
-func (m *MessageHandler) clearFromTo(in string, lang language) string {
-	for _, s := range cleanByLang[lang] {
-		if strings.Contains(in, s) {
-			in = strings.ReplaceAll(in, strings.TrimRight(s, " "), "")
+// parseRawMsgAsExercisesAndPeriods Парсит воходное сообщение без знаков пунктуации.
+// Разбивает на слова, находит упражнение, затем парсит период
+func (m *MessageHandler) parseRawMsgAsExercisesAndPeriods(ctx context.Context, rawMsg string, lang language) (exercises Exercises, periods periods, invalidPeriods []string, err error) {
+	// Разбиваем по пробелам
+	words := strings.Split(rawMsg, " ")
+
+	var currentWord int // Здесь запомним, на каком элементе выйдем из цикла
+
+	// Идём по каждому слову и ищем упражнения, который надо достать до первого фейла
+	for currentWord < len(words) {
+		if textContainsAllExerciseWords(words[currentWord], lang) {
+			m.Print(ctx, "the message contains all exercises", "msg", rawMsg, "all exercises word", words[currentWord])
+			currentWord++ // Пропускаем это слово, фильтр будет пустой, значит вытащим и так всё
+			break
+		}
+
+		// Вытаскиваем упражнение учитывая, что оно моглобыть из нескольких слов
+		ex, found, wordsLen := m.extractExerciseAndItsPosition(words[currentWord:], lang)
+		if !found { // Упражнение состоит из одного слова, продолжаем перебирать слова
+			currentWord++
+			break
+		}
+		exercises = append(exercises, ex)
+		currentWord += wordsLen + 1 // Сдвигаем на то кол-во слов, которое занимает это упражнение
+	}
+
+	// Проверяем, если вышли, и не нашли ни одного упражнения
+	if len(exercises) == 0 && currentWord == 0 {
+		return nil, nil, nil, errCantRecognizeEx
+	}
+
+	// Смотрим, есть ли кусок фразы про весь период в тексте.
+	// Если нет, то парсим каждый период.
+	// Если да, или если не задан, то считаем, что нужно взять за всё время.
+	periodWords := words[currentWord:]
+	if len(periodWords) > 0 {
+		// Слепим оставшуюся подстроку под период
+		periodLeftPart := strings.Join(periodWords, " ")
+		// Если в ней нет спец фразы для всех упражнений
+		if !textContainsAllPeriodWords(periodLeftPart, lang) {
+			// То идём парсить каждый элеент
+			periods, invalidPeriods = m.prepareCorrectAndInvalidPeriods(ctx, periodWords, lang)
 		}
 	}
 
-	return in
+	return
 }
 
-func (m *MessageHandler) prepareCorrectAndInvalidPeriods(ctx context.Context, periods []string, lang language) (res periods, invalid []string) {
+// extractExerciseAndItsPosition Достаёт из набора слов упражнение с учётом того, что оно может состоять:
+// - Из одного слова.
+// - Из двух и более слов, первое из которых уже является корректным упражнением.
+// - Из двух и более слов, первое из которых не является корректным упражнением.
+// Принимает набор слов и язык.
+// Возвращает первое найденное упражнение и индекс его последнего слова из набора слов.
+func (m *MessageHandler) extractExerciseAndItsPosition(words []string, lang language) (exercise Exercise, ok bool, exIdx int) {
+	// Когда слов нет
+	if len(words) == 0 {
+		return
+	}
+
+	multiwordExName := words[exIdx]
+
+	// Пробуем достать упражнение по первому слову
+	exercise, ok = exerciseByLang[lang][multiwordExName]
+
+	// Если оно было одно, его и вернём
+	if len(words) == 1 {
+		return
+	}
+
+	// Когда больше одного, сдвинемся до конца всех слов текущего упражнения
+	for len(words) > exIdx+1 {
+		multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[exIdx+1])
+		multiwordEx, exists := exerciseByLang[lang][multiwordExName]
+		if !exists && !ok { // Если не распознано, пробуем со следующим словом, но только если мы ещё не находили упражнение
+			exIdx++
+			continue
+		}
+
+		// Если оно реально состоит из 2х и более слов, снова сдвигаем i на следующее слово
+		if exercise.isZero() || exercise == multiwordEx {
+			ok = true
+			exercise = multiwordEx
+			exIdx++
+			continue
+		}
+
+		// Останавливаемся, если упражнения различаются или если не нашли.
+		// Мы захватили уже следующее или не найдено ни одного упражнения.
+		break
+	}
+
+	return
+}
+
+func (m *MessageHandler) prepareCorrectAndInvalidPeriods(ctx context.Context, periodWords []string, lang language) (res periods, invalid []string) {
 	// Проходимся по каждому периоду
-	for i := range periods {
+	for i := range periodWords {
+		// Скипаем предлоги
+		if _, isPreposition := prepositionByLang[lang][periodWords[i]]; isPreposition {
+			continue
+		}
+
 		// Если он текстовый
-		isText := m.langReByLang(lang).MatchString(periods[i])
+		isText := m.langReByLang(lang).MatchString(periodWords[i])
 
 		// То обработаем, попробуем взять интервалы из текста
 		if isText {
-			p, ok := m.periodByText(periods[i], time.Now(), lang)
+			p, ok := m.periodByText(periodWords[i], time.Now(), lang)
 			if ok { // Если получилось, добавляем в результат
 				res = append(res, p)
 				continue
 			}
 
 			// Иначе добавляем в невалидные
-			m.Print(ctx, "captured invalid text period", "period", periods[i])
-			invalid = append(invalid, periods[i])
+			m.Print(ctx, "captured invalid text period", "period", periodWords[i])
+			invalid = append(invalid, periodWords[i])
 			continue
 		}
 
 		// Иначе это должны быть даты, обработаем их
-		p, inv := m.periodByTime(ctx, periods[i])
+		p, inv := m.periodByTime(ctx, periodWords[i])
 		invalid = append(invalid, inv...)
 		if !p.IsZero() {
 			res = append(res, p)
@@ -509,10 +541,10 @@ func (m *MessageHandler) periodByTime(ctx context.Context, interval string) (p p
 
 func (m *MessageHandler) parseDate(date string) (time.Time, error) {
 	// Пробуем распарсить в формате с полным годом
-	parsed, err := time.Parse("02012006", date)
+	parsed, err := time.Parse("02.01.2006", date)
 	if err != nil {
 		// Если не получилось, пробуем распарсить в формате с коротким годом
-		parsed, err = time.Parse("020106", date)
+		parsed, err = time.Parse("02.01.06", date)
 		if err != nil {
 			return time.Time{}, err
 		}
