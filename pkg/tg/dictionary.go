@@ -24,8 +24,12 @@ const (
 	lungeEx        Exercise = "lunge"
 	burpeeEx       Exercise = "burpee"
 	skippingRopeEx Exercise = "skippingRope"
-	//joggingEx      Exercise = "jogging"
-	allEx Exercise = "all"
+	joggingEx      Exercise = "jogging"
+	benchPressEx   Exercise = "benchPress"
+	deadliftEx     Exercise = "deadlift"
+	barbellSquatEx Exercise = "barbellSquat"
+	plankEx        Exercise = "plank"
+	allEx          Exercise = "all"
 )
 
 const (
@@ -285,10 +289,42 @@ var (
 			"скокалки": skippingRopeEx,
 
 			// joggingEx
-			//"бег":      joggingEx,
-			//"бегал":    joggingEx,
-			//"пробежал": joggingEx,
-			//"пробежка": joggingEx,
+			"бег":      joggingEx,
+			"бегал":    joggingEx,
+			"пробежал": joggingEx,
+			"пробежка": joggingEx,
+			"пробежку": joggingEx,
+			"бежал":    joggingEx,
+
+			// benchPressEx
+			"жим":      benchPressEx,
+			"жим лёжа": benchPressEx,
+			"жим лежа": benchPressEx,
+			"жым":      benchPressEx,
+			"жым лёжа": benchPressEx,
+			"жым лежа": benchPressEx,
+
+			// deadliftEx
+			"становая":      deadliftEx,
+			"становая тяга": deadliftEx,
+			"становую":      deadliftEx,
+			"становую тягу": deadliftEx,
+			"станавая":      deadliftEx,
+			"станавая тяга": deadliftEx,
+			"станавую":      deadliftEx,
+			"станавую тягу": deadliftEx,
+
+			// barbellSquatEx
+			"присед со штангой":  barbellSquatEx,
+			"приседы со штангой": barbellSquatEx,
+			"присед штанга":      barbellSquatEx,
+
+			// plankEx
+			"планка":  plankEx,
+			"планку":  plankEx,
+			"планки":  plankEx,
+			"планке":  plankEx,
+			"планкой": plankEx,
 
 			// all
 			"всё":            allEx,
@@ -453,13 +489,32 @@ var (
 			"skip ropes":     skippingRopeEx,
 
 			// joggingEx
-			//"jogging": joggingEx,
-			//"joging":  joggingEx,
-			//"joggin":  joggingEx,
-			//"run":     joggingEx,
-			//"running": joggingEx,
-			//"trot":    joggingEx,
-			//"sprint":  joggingEx,
+			"jogging": joggingEx,
+			"joging":  joggingEx,
+			"joggin":  joggingEx,
+			"run":     joggingEx,
+			"running": joggingEx,
+			"trot":    joggingEx,
+			"sprint":  joggingEx,
+
+			// benchPressEx
+			"bench":       benchPressEx,
+			"bench press": benchPressEx,
+			"benchpress":  benchPressEx,
+
+			// deadliftEx
+			"deadlift":  deadliftEx,
+			"deadlifts": deadliftEx,
+			"dead lift": deadliftEx,
+
+			// barbellSquatEx
+			"barbell squat":  barbellSquatEx,
+			"barbell squats": barbellSquatEx,
+			"barbellsquat":   barbellSquatEx,
+
+			// plankEx
+			"plank":  plankEx,
+			"planks": plankEx,
 
 			// all
 			"all":        allEx,
@@ -625,7 +680,11 @@ var (
 			lungeEx:        "выпады",
 			burpeeEx:       "бёрпи",
 			skippingRopeEx: "скакалка",
-			//joggingEx:      "бег",
+			joggingEx:      "бег",
+			benchPressEx:   "жим лёжа",
+			deadliftEx:     "становая тяга",
+			barbellSquatEx: "присед со штангой",
+			plankEx:        "планка",
 		},
 		langEN: {
 			pullUpEx:       "pull-ups",
@@ -637,7 +696,11 @@ var (
 			lungeEx:        "lunges",
 			burpeeEx:       "burpee",
 			skippingRopeEx: "skipping rope",
-			//joggingEx:      "jogging",
+			joggingEx:      "jogging",
+			benchPressEx:   "bench press",
+			deadliftEx:     "deadlift",
+			barbellSquatEx: "barbell squat",
+			plankEx:        "plank",
 		},
 	}
 	periodTextByLang = map[language]map[textPeriod]string{
@@ -680,6 +743,13 @@ const (
 	tableExCol
 	tableCntCol
 	tableSetCol
+	tableWeightCol
+	tableDistCol
+	tableTimeCol
+	weightRequired
+	durationRequired
+	distanceRequired
+	paramInvalid
 	commonHelpMsg
 	addHelpMsg
 	showHelpMsg
@@ -707,6 +777,13 @@ var (
 			tableExCol:       "упражнение",
 			tableCntCol:      "кол-во",
 			tableSetCol:      "подходы",
+			tableWeightCol:   "вес",
+			tableDistCol:     "дистанция",
+			tableTimeCol:     "время",
+			weightRequired:   "Для этого упражнения нужно указать вес. Пример: жим 80кг 10",
+			durationRequired: "Для этого упражнения нужно указать время. Пример: планка 90сек",
+			distanceRequired: "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
+			paramInvalid:     "Не удалось распознать параметр: %s",
 			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
 				"Ты же ведь занимаешься спортом, верно?🤔\n" +
 				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n" +
@@ -753,6 +830,13 @@ var (
 			tableExCol:       "exercise",
 			tableCntCol:      "reps",
 			tableSetCol:      "sets",
+			tableWeightCol:   "weight",
+			tableDistCol:     "distance",
+			tableTimeCol:     "time",
+			weightRequired:   "Weight is required for this exercise. Example: bench 80kg 10",
+			durationRequired: "Duration is required for this exercise. Example: plank 90sec",
+			distanceRequired: "Distance is required for this exercise. Example: run 5km 25min",
+			paramInvalid:     "Can't recognize parameter: %s",
 			commonHelpMsg: "Hi there! I can keep your training statistic.\n" +
 				"You do sports, right?🤔\n" +
 				"Write me direct messages. Mention me in groups like this: `@%s`\n" +
@@ -847,25 +931,42 @@ func allPeriodsByLang(lang language) string {
 	return b.String()
 }
 
-var (
-	// TODO: implement later
-	//hasDistance = map[Exercise]struct{}{
-	//	joggingEx: {},
-	//}
-	//hasWeight = map[Exercise]struct{}{
-	//	pullUpEx:   {},
-	//	muscleUpEx: {},
-	//	dipsEx:     {},
-	//}
-	exHasCnt = map[Exercise]struct{}{
-		pullUpEx:       {},
-		muscleUpEx:     {},
-		pushUpEx:       {},
-		dipsEx:         {},
-		absEx:          {},
-		squatEx:        {},
-		lungeEx:        {},
-		burpeeEx:       {},
-		skippingRopeEx: {},
-	}
-)
+var exerciseCategoryMap = map[Exercise]ExerciseCategory{
+	benchPressEx:   CategoryRepsWeight,
+	deadliftEx:     CategoryRepsWeight,
+	barbellSquatEx: CategoryRepsWeight,
+	joggingEx:      CategoryDistTime,
+	plankEx:        CategoryDuration,
+}
+
+var unitSuffixByLang = map[language]map[string]UnitDef{
+	langRU: {
+		"кг":  {ParamType: ParamWeight, Multiplier: 1},
+		"г":   {ParamType: ParamWeight, Multiplier: 0.001},
+		"км":  {ParamType: ParamDistance, Multiplier: 1000},
+		"м":   {ParamType: ParamDistance, Multiplier: 1},
+		"ч":   {ParamType: ParamDuration, Multiplier: 3600},
+		"мин": {ParamType: ParamDuration, Multiplier: 60},
+		"сек": {ParamType: ParamDuration, Multiplier: 1},
+		"с":   {ParamType: ParamDuration, Multiplier: 1},
+		"раз": {ParamType: ParamCount, Multiplier: 1},
+		"р":   {ParamType: ParamCount, Multiplier: 1},
+	},
+	langEN: {
+		"kg":   {ParamType: ParamWeight, Multiplier: 1},
+		"lbs":  {ParamType: ParamWeight, Multiplier: 0.453592},
+		"lb":   {ParamType: ParamWeight, Multiplier: 0.453592},
+		"g":    {ParamType: ParamWeight, Multiplier: 0.001},
+		"km":   {ParamType: ParamDistance, Multiplier: 1000},
+		"m":    {ParamType: ParamDistance, Multiplier: 1},
+		"mi":   {ParamType: ParamDistance, Multiplier: 1609.34},
+		"h":    {ParamType: ParamDuration, Multiplier: 3600},
+		"hr":   {ParamType: ParamDuration, Multiplier: 3600},
+		"min":  {ParamType: ParamDuration, Multiplier: 60},
+		"sec":  {ParamType: ParamDuration, Multiplier: 1},
+		"s":    {ParamType: ParamDuration, Multiplier: 1},
+		"reps": {ParamType: ParamCount, Multiplier: 1},
+		"rep":  {ParamType: ParamCount, Multiplier: 1},
+		"x":    {ParamType: ParamCount, Multiplier: 1},
+	},
+}

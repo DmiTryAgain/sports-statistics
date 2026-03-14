@@ -40,6 +40,8 @@ mfd-model:
 	@mfd-generator model -m ./docs/model/sportStatistics.mfd -p db -o ./pkg/db
 mfd-repo: --check-ns
 	@mfd-generator repo -m ./docs/model/sportStatistics.mfd -p db -o ./pkg/db -n $(NS)
+mfd-dbtest:
+	@mfd-generator dbtest -x 'github.com/DmiTryAgain/sports-statistics/pkg/db' -o './pkg/db/test' -m './docs/model/sportStatistics.mfd' -f
 
 --check-ns:
 ifeq ($(NS),"NONE")

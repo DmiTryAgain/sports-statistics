@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"text/template"
 	"time"
 
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
@@ -23,8 +22,10 @@ var (
 )
 
 var (
-	enLangRe = regexp.MustCompile(`^[a-zA-Z0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
-	ruLangRe = regexp.MustCompile(`^[а-яА-ЯёЁ0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
+	enLangRe     = regexp.MustCompile(`^[a-zA-Z0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
+	ruLangRe     = regexp.MustCompile(`^[а-яА-ЯёЁ0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
+	valueUnitRe  = regexp.MustCompile(`^(\d+[.,]?\d*)\s*([a-zA-Zа-яА-ЯёЁ]+)$`)
+	justNumberRe = regexp.MustCompile(`^(\d+[.,]?\d*)$`)
 )
 
 type MessageHandler struct {
@@ -204,6 +205,133 @@ func (m *MessageHandler) detectCmd(rawMsg string, lang language) (cleaned string
 	return cleaned, cmdByLang[lang][strings.ToLower(words[0])]
 }
 
+// parseValueWithUnit пытается извлечь числовое значение и единицу измерения из слова.
+// Поддерживает форматы: "80кг" (слитно).
+// Если слово — только число без суффикса, возвращает значение с hasUnit=false.
+func parseValueWithUnit(word string, lang language) (value float64, unit UnitDef, hasUnit bool, err error) {
+	// Пробуем слитный формат: число + суффикс
+	if matches := valueUnitRe.FindStringSubmatch(word); len(matches) == 3 {
+		numStr := strings.ReplaceAll(matches[1], ",", ".")
+		value, err = strconv.ParseFloat(numStr, 64)
+		if err != nil {
+			return 0, UnitDef{}, false, fmt.Errorf("parse number %q: %w", matches[1], err)
+		}
+		suffix := strings.ToLower(matches[2])
+		if u, ok := unitSuffixByLang[lang][suffix]; ok {
+			return value, u, true, nil
+		}
+		return 0, UnitDef{}, false, fmt.Errorf("unknown unit suffix %q", suffix)
+	}
+
+	// Пробуем голое число
+	if matches := justNumberRe.FindStringSubmatch(word); len(matches) == 2 {
+		numStr := strings.ReplaceAll(matches[1], ",", ".")
+		value, err = strconv.ParseFloat(numStr, 64)
+		if err != nil {
+			return 0, UnitDef{}, false, fmt.Errorf("parse number %q: %w", matches[1], err)
+		}
+		return value, UnitDef{}, false, nil
+	}
+
+	return 0, UnitDef{}, false, fmt.Errorf("can't parse %q as value", word)
+}
+
+var (
+	errCountRequired    = errors.New("count required")
+	errWeightRequired   = errors.New("weight required")
+	errDistanceRequired = errors.New("distance required")
+	errDurationRequired = errors.New("duration required")
+)
+
+func (pp *ParsedParams) addParam(pt ParamType, val float64) {
+	switch pt {
+	case ParamCount:
+		if pp.Count == nil {
+			pp.Count = ptrFloat64(val)
+		} else {
+			*pp.Count += val
+		}
+	case ParamWeight:
+		if pp.WeightKg == nil {
+			pp.WeightKg = ptrFloat64(val)
+		} else {
+			*pp.WeightKg += val
+		}
+	case ParamDistance:
+		if pp.DistanceM == nil {
+			pp.DistanceM = ptrFloat64(val)
+		} else {
+			*pp.DistanceM += val
+		}
+	case ParamDuration:
+		if pp.DurationSec == nil {
+			pp.DurationSec = ptrFloat64(val)
+		} else {
+			*pp.DurationSec += val
+		}
+	}
+}
+
+func (pp *ParsedParams) validate(category ExerciseCategory) error {
+	for _, rp := range category.RequiredParams() {
+		switch rp {
+		case ParamCount:
+			if pp.Count == nil {
+				return errCountRequired
+			}
+		case ParamWeight:
+			if pp.WeightKg == nil {
+				return errWeightRequired
+			}
+		case ParamDistance:
+			if pp.DistanceM == nil {
+				return errDistanceRequired
+			}
+		case ParamDuration:
+			if pp.DurationSec == nil {
+				return errDurationRequired
+			}
+		}
+	}
+	return nil
+}
+
+// parseExerciseParams парсит слова после упражнения, извлекая параметры в соответствии с категорией.
+func parseExerciseParams(words []string, category ExerciseCategory, lang language) (ParsedParams, error) {
+	var pp ParsedParams
+
+	for i := 0; i < len(words); i++ {
+		value, unit, hasUnit, err := parseValueWithUnit(words[i], lang)
+		if err != nil {
+			continue
+		}
+
+		if hasUnit {
+			pp.addParam(unit.ParamType, value*unit.Multiplier)
+			continue
+		}
+
+		// Голое число — проверяем следующее слово как суффикс
+		if i+1 < len(words) {
+			nextWord := strings.ToLower(words[i+1])
+			if u, ok := unitSuffixByLang[lang][nextWord]; ok {
+				pp.addParam(u.ParamType, value*u.Multiplier)
+				i++
+				continue
+			}
+		}
+
+		// Голое число без суффикса → count
+		pp.addParam(ParamCount, value)
+	}
+
+	if err := pp.validate(category); err != nil {
+		return pp, err
+	}
+
+	return pp, nil
+}
+
 func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string, lang language) (string, error) {
 	lg := m.With("msg", rawMsg, "userID", tgUserID)
 	if rawMsg == "" {
@@ -221,34 +349,51 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string,
 	}
 
 	position++ // Нужно продолжить со следующего слова
-	// Если в упражнении должно быть задано количество
-	if ex.mustHaveCnt() {
-		if len(words[position:]) < 1 { // Проверяем, что слова вообще остались после упражнений
-			lg.Print(ctx, "exercise must have count", "exercise", ex)
-			return messagesByLang[lang][cntRequired], nil
-		}
+	category := ex.Category()
+	remainingWords := words[position:]
 
-		cnt, err := strconv.ParseFloat(words[position], 64)
-		if err != nil {
-			return fmt.Sprintf("%s: %s", messagesByLang[lang][cntInvalid], words[position]), nil //nolint:nilerr
-		} else if cnt < 1 {
-			lg.Print(ctx, "invalid exercise count", "count", cnt)
-			return messagesByLang[lang][cntGE], nil
-		}
+	if len(remainingWords) < 1 {
+		lg.Print(ctx, "exercise requires params", "exercise", ex)
+		return m.missingParamMessage(category, lang), nil
+	}
 
-		_, err = m.statRepo.AddStatistic(ctx, &db.Statistic{
-			TgUserID: tgUserID,
-			Exercise: ex.String(),
-			Count:    cnt,
-			Params:   nil,
-			StatusID: 1,
-		})
-		if err != nil {
-			return "", err
-		}
+	parsedParams, err := parseExerciseParams(remainingWords, category, lang)
+	if err != nil {
+		lg.Print(ctx, "param parsing error", "exercise", ex, "err", err)
+		return m.missingParamMessage(category, lang), nil
+	}
+
+	cnt := parsedParams.CountOrDefault()
+	if cnt < 1 {
+		lg.Print(ctx, "invalid exercise count", "count", cnt)
+		return messagesByLang[lang][cntGE], nil
+	}
+
+	_, err = m.statRepo.AddStatistic(ctx, &db.Statistic{
+		TgUserID: tgUserID,
+		Exercise: ex.String(),
+		Count:    cnt,
+		Params:   parsedParams.ToDBParams(),
+		StatusID: 1,
+	})
+	if err != nil {
+		return "", err
 	}
 
 	return messagesByLang[lang][exAdded], nil
+}
+
+func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang language) string {
+	switch category {
+	case CategoryRepsWeight:
+		return messagesByLang[lang][weightRequired]
+	case CategoryDistTime:
+		return messagesByLang[lang][distanceRequired]
+	case CategoryDuration:
+		return messagesByLang[lang][durationRequired]
+	default:
+		return messagesByLang[lang][cntRequired]
+	}
 }
 
 func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string, lang language) (res string, err error) {
@@ -559,38 +704,65 @@ func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedSt
 		return "", nil
 	}
 
-	tmpl := fmt.Sprintf(""+
-		"%s\t%s\t%s\n"+
-		"{{ range .Stat }}"+
-		"{{ .TranslatedExercise }}\t{{ .SumCount }}\t{{ .Sets }}\n"+
-		"{{ end }}", messagesByLang[lang][tableExCol], messagesByLang[lang][tableCntCol], messagesByLang[lang][tableSetCol],
-	)
+	tgStats := NewGroupedStatisticList(in, lang)
 
-	type Data struct {
-		Stat []GroupedStatistic
+	hasWeight := anyHasWeight(tgStats)
+	hasDistance := anyHasDistance(tgStats)
+	hasDuration := anyHasDuration(tgStats)
+
+	// Build header
+	header := messagesByLang[lang][tableExCol]
+	if hasWeight {
+		header += "\t" + messagesByLang[lang][tableWeightCol]
 	}
+	if hasDistance {
+		header += "\t" + messagesByLang[lang][tableDistCol]
+	}
+	if hasDuration {
+		header += "\t" + messagesByLang[lang][tableTimeCol]
+	}
+	header += "\t" + messagesByLang[lang][tableCntCol]
+	header += "\t" + messagesByLang[lang][tableSetCol]
 
-	return tableFromTemplate("feedTrafficDeviations", tmpl, Data{Stat: NewGroupedStatisticList(in, lang)})
-}
-
-func tableFromTemplate(name, tmpl string, data interface{}) (string, error) {
-	t := template.Must(template.New(name).Parse(tmpl))
+	// Build rows
 	var b strings.Builder
 	b.WriteString("```\n")
 
 	wr := tabwriter.NewWriter(&b, 0, 1, 4, ' ', 0)
-	err := t.Execute(wr, data)
-	if err != nil {
-		return "", err
+	fmt.Fprintln(wr, header)
+
+	for _, s := range tgStats {
+		row := s.TranslatedExercise
+		if hasWeight {
+			if s.WeightKg != nil {
+				row += "\t" + formatWeight(*s.WeightKg, lang)
+			} else {
+				row += "\t-"
+			}
+		}
+		if hasDistance {
+			if s.DistanceM != nil {
+				row += "\t" + formatDistance(*s.DistanceM, lang)
+			} else {
+				row += "\t-"
+			}
+		}
+		if hasDuration {
+			if s.SumDurationSec != nil {
+				row += "\t" + formatDuration(*s.SumDurationSec, lang)
+			} else {
+				row += "\t-"
+			}
+		}
+		row += fmt.Sprintf("\t%g\t%d", s.SumCount, s.Sets)
+		fmt.Fprintln(wr, row)
 	}
 
-	err = wr.Flush()
-	if err != nil {
+	if err := wr.Flush(); err != nil {
 		return "", err
 	}
 
 	b.WriteString("```")
-
 	return b.String(), nil
 }
 
