@@ -15,21 +15,41 @@ const (
 )
 
 const (
-	pullUpEx       Exercise = "pullUp"
-	muscleUpEx     Exercise = "muscleUp"
-	pushUpEx       Exercise = "pushUp"
-	dipsEx         Exercise = "dip"
-	absEx          Exercise = "abs"
-	squatEx        Exercise = "squat"
-	lungeEx        Exercise = "lunge"
-	burpeeEx       Exercise = "burpee"
-	skippingRopeEx Exercise = "skippingRope"
-	joggingEx      Exercise = "jogging"
-	benchPressEx   Exercise = "benchPress"
-	deadliftEx     Exercise = "deadlift"
-	barbellSquatEx Exercise = "barbellSquat"
-	plankEx        Exercise = "plank"
-	allEx          Exercise = "all"
+	pullUpEx         Exercise = "pullUp"
+	muscleUpEx       Exercise = "muscleUp"
+	pushUpEx         Exercise = "pushUp"
+	dipsEx           Exercise = "dip"
+	absEx            Exercise = "abs"
+	squatEx          Exercise = "squat"
+	lungeEx          Exercise = "lunge"
+	burpeeEx         Exercise = "burpee"
+	skippingRopeEx   Exercise = "skippingRope"
+	hyperextensionEx Exercise = "hyperextension"
+	legRaiseEx       Exercise = "legRaise"
+
+	joggingEx Exercise = "jogging"
+	plankEx   Exercise = "plank"
+
+	benchPressEx       Exercise = "benchPress"
+	deadliftEx         Exercise = "deadlift"
+	barbellSquatEx     Exercise = "barbellSquat"
+	latPulldownEx      Exercise = "latPulldown"
+	legPressEx         Exercise = "legPress"
+	preacherCurlEx     Exercise = "preacherCurl"
+	shoulderPressEx    Exercise = "shoulderPress"
+	bentOverRowEx      Exercise = "bentOverRow"
+	dumbbellCurlEx     Exercise = "dumbbellCurl"
+	legExtensionEx     Exercise = "legExtension"
+	legCurlEx          Exercise = "legCurl"
+	seatedRowEx        Exercise = "seatedRow"
+	chestFlyEx         Exercise = "chestFly"
+	tricepPushdownEx   Exercise = "tricepPushdown"
+	romanianDeadliftEx Exercise = "romanianDeadlift"
+	hipThrustEx        Exercise = "hipThrust"
+	lateralRaiseEx     Exercise = "lateralRaise"
+	shrugEx            Exercise = "shrug"
+
+	allEx Exercise = "all"
 )
 
 const (
@@ -326,6 +346,142 @@ var (
 			"планке":  plankEx,
 			"планкой": plankEx,
 
+			// hyperextensionEx
+			"гиперэкстензия": hyperextensionEx,
+			"гиперэкстензии": hyperextensionEx,
+			"гиперэкстензию": hyperextensionEx,
+			"гиперэкстензий": hyperextensionEx,
+			"гиперэкстэнзия": hyperextensionEx,
+			"гиперэкстэнзии": hyperextensionEx,
+			"гиперэкстэнзию": hyperextensionEx,
+			"гиперикстензия": hyperextensionEx,
+			"гиперикстензии": hyperextensionEx,
+			"экстензия":      hyperextensionEx,
+			"экстензии":      hyperextensionEx,
+
+			// legRaiseEx
+			"подъём ног":          legRaiseEx,
+			"подъем ног":          legRaiseEx,
+			"подъёмы ног":         legRaiseEx,
+			"подъемы ног":         legRaiseEx,
+			"подъём ног в висе":   legRaiseEx,
+			"подъем ног в висе":   legRaiseEx,
+			"подъёмы ног в висе":  legRaiseEx,
+			"подъемы ног в висе":  legRaiseEx,
+			"поднятие ног":        legRaiseEx,
+			"поднятие ног в висе": legRaiseEx,
+
+			// latPulldownEx
+			"тяга верхнего блока": latPulldownEx,
+			"тяга верхнева блока": latPulldownEx,
+			"тяга верхнего блоко": latPulldownEx,
+			"верхний блок":        latPulldownEx,
+			"верхняя тяга":        latPulldownEx,
+
+			// legPressEx
+			"жим ногами": legPressEx,
+			"жим нагами": legPressEx,
+			"жым ногами": legPressEx,
+			"жым нагами": legPressEx,
+
+			// preacherCurlEx
+			"скамья скотта":   preacherCurlEx,
+			"скамья скота":    preacherCurlEx,
+			"скотта":          preacherCurlEx,
+			"скота":           preacherCurlEx,
+			"скамейка скотта": preacherCurlEx,
+			"скамейка скота":  preacherCurlEx,
+
+			// shoulderPressEx
+			"жим стоя":        shoulderPressEx,
+			"жым стоя":        shoulderPressEx,
+			"армейский жим":   shoulderPressEx,
+			"армейский жым":   shoulderPressEx,
+			"армейскый жим":   shoulderPressEx,
+			"армейскый жым":   shoulderPressEx,
+			"жим над головой": shoulderPressEx,
+
+			// bentOverRowEx
+			"тяга в наклоне":        bentOverRowEx,
+			"тяга штанги в наклоне": bentOverRowEx,
+			"тяга штанги в наклони": bentOverRowEx,
+			"тяга в наклони":        bentOverRowEx,
+
+			// dumbbellCurlEx
+			"подъём гантелей":           dumbbellCurlEx,
+			"подъем гантелей":           dumbbellCurlEx,
+			"подъём гантелей на бицепс": dumbbellCurlEx,
+			"подъем гантелей на бицепс": dumbbellCurlEx,
+			"бицепс гантели":            dumbbellCurlEx,
+			"бицепс гантелями":          dumbbellCurlEx,
+			"сгибание на бицепс":        dumbbellCurlEx,
+			"сгибания на бицепс":        dumbbellCurlEx,
+
+			// legExtensionEx
+			"разгибание ног":             legExtensionEx,
+			"разгибания ног":             legExtensionEx,
+			"разгибание ног в тренажёре": legExtensionEx,
+			"разгибание ног в тренажере": legExtensionEx,
+
+			// legCurlEx
+			"сгибание ног":             legCurlEx,
+			"сгибания ног":             legCurlEx,
+			"сгибание ног в тренажёре": legCurlEx,
+			"сгибание ног в тренажере": legCurlEx,
+
+			// seatedRowEx
+			"тяга нижнего блока":  seatedRowEx,
+			"тяга нижнева блока":  seatedRowEx,
+			"нижний блок":         seatedRowEx,
+			"нижняя тяга":         seatedRowEx,
+			"горизонтальная тяга": seatedRowEx,
+
+			// chestFlyEx
+			"сведение рук":   chestFlyEx,
+			"сведения рук":   chestFlyEx,
+			"бабочка":        chestFlyEx,
+			"бабачка":        chestFlyEx,
+			"разведение рук": chestFlyEx,
+			"разведения рук": chestFlyEx,
+
+			// tricepPushdownEx
+			"разгибание на трицепс": tricepPushdownEx,
+			"разгибания на трицепс": tricepPushdownEx,
+			"трицепс на блоке":      tricepPushdownEx,
+			"трицепс блок":          tricepPushdownEx,
+
+			// romanianDeadliftEx
+			"румынская тяга": romanianDeadliftEx,
+			"румынская":      romanianDeadliftEx,
+			"румынскую тягу": romanianDeadliftEx,
+			"румынскую":      romanianDeadliftEx,
+			"румынка":        romanianDeadliftEx,
+			"румынку":        romanianDeadliftEx,
+			"мёртвая тяга":   romanianDeadliftEx,
+			"мертвая тяга":   romanianDeadliftEx,
+
+			// hipThrustEx
+			"ягодичный мост":   hipThrustEx,
+			"ягодичный мостик": hipThrustEx,
+			"ягадичный мост":   hipThrustEx,
+			"ягадичный мостик": hipThrustEx,
+
+			// lateralRaiseEx
+			"махи гантелями":            lateralRaiseEx,
+			"махи":                      lateralRaiseEx,
+			"разводка гантелей":         lateralRaiseEx,
+			"разводка":                  lateralRaiseEx,
+			"махи в стороны":            lateralRaiseEx,
+			"подъём гантелей в стороны": lateralRaiseEx,
+			"подъем гантелей в стороны": lateralRaiseEx,
+
+			// shrugEx
+			"шраги":             shrugEx,
+			"шраг":              shrugEx,
+			"шрагов":            shrugEx,
+			"шраги со штангой":  shrugEx,
+			"шраги с гантелями": shrugEx,
+
 			// all
 			"всё":            allEx,
 			"все":            allEx,
@@ -516,6 +672,122 @@ var (
 			"plank":  plankEx,
 			"planks": plankEx,
 
+			// hyperextensionEx
+			"hyperextension":  hyperextensionEx,
+			"hyperextensions": hyperextensionEx,
+			"hyper extension": hyperextensionEx,
+			"hyper":           hyperextensionEx,
+			"back extension":  hyperextensionEx,
+			"back extensions": hyperextensionEx,
+
+			// legRaiseEx
+			"leg raise":          legRaiseEx,
+			"leg raises":         legRaiseEx,
+			"legraise":           legRaiseEx,
+			"legraises":          legRaiseEx,
+			"hanging leg raise":  legRaiseEx,
+			"hanging leg raises": legRaiseEx,
+
+			// latPulldownEx
+			"lat pulldown":  latPulldownEx,
+			"lat pulldowns": latPulldownEx,
+			"latpulldown":   latPulldownEx,
+			"pulldown":      latPulldownEx,
+			"pulldowns":     latPulldownEx,
+			"pull down":     latPulldownEx,
+			"pull downs":    latPulldownEx,
+
+			// legPressEx
+			"leg press": legPressEx,
+			"legpress":  legPressEx,
+
+			// preacherCurlEx
+			"preacher curl":  preacherCurlEx,
+			"preacher curls": preacherCurlEx,
+			"preachercurl":   preacherCurlEx,
+			"scott bench":    preacherCurlEx,
+			"scott curl":     preacherCurlEx,
+			"scott curls":    preacherCurlEx,
+
+			// shoulderPressEx
+			"shoulder press": shoulderPressEx,
+			"shoulderpress":  shoulderPressEx,
+			"overhead press": shoulderPressEx,
+			"overheadpress":  shoulderPressEx,
+			"ohp":            shoulderPressEx,
+			"military press": shoulderPressEx,
+
+			// bentOverRowEx
+			"bent over row":  bentOverRowEx,
+			"bent over rows": bentOverRowEx,
+			"bentoverrow":    bentOverRowEx,
+			"barbell row":    bentOverRowEx,
+			"barbell rows":   bentOverRowEx,
+
+			// dumbbellCurlEx
+			"dumbbell curl":  dumbbellCurlEx,
+			"dumbbell curls": dumbbellCurlEx,
+			"dumbbellcurl":   dumbbellCurlEx,
+			"bicep curl":     dumbbellCurlEx,
+			"bicep curls":    dumbbellCurlEx,
+			"biceps curl":    dumbbellCurlEx,
+			"biceps curls":   dumbbellCurlEx,
+
+			// legExtensionEx
+			"leg extension":  legExtensionEx,
+			"leg extensions": legExtensionEx,
+			"legextension":   legExtensionEx,
+
+			// legCurlEx
+			"leg curl":  legCurlEx,
+			"leg curls": legCurlEx,
+			"legcurl":   legCurlEx,
+
+			// seatedRowEx
+			"seated row":  seatedRowEx,
+			"seated rows": seatedRowEx,
+			"seatedrow":   seatedRowEx,
+			"cable row":   seatedRowEx,
+			"cable rows":  seatedRowEx,
+
+			// chestFlyEx
+			"chest fly":   chestFlyEx,
+			"chest flys":  chestFlyEx,
+			"chest flies": chestFlyEx,
+			"pec deck":    chestFlyEx,
+			"pec fly":     chestFlyEx,
+			"pec flys":    chestFlyEx,
+
+			// tricepPushdownEx
+			"tricep pushdown":   tricepPushdownEx,
+			"tricep pushdowns":  tricepPushdownEx,
+			"triceppushdown":    tricepPushdownEx,
+			"tricep extension":  tricepPushdownEx,
+			"tricep extensions": tricepPushdownEx,
+
+			// romanianDeadliftEx
+			"romanian deadlift":  romanianDeadliftEx,
+			"romanian deadlifts": romanianDeadliftEx,
+			"rdl":                romanianDeadliftEx,
+			"stiff leg deadlift": romanianDeadliftEx,
+
+			// hipThrustEx
+			"hip thrust":   hipThrustEx,
+			"hip thrusts":  hipThrustEx,
+			"hipthrust":    hipThrustEx,
+			"glute bridge": hipThrustEx,
+
+			// lateralRaiseEx
+			"lateral raise":  lateralRaiseEx,
+			"lateral raises": lateralRaiseEx,
+			"lateralraise":   lateralRaiseEx,
+			"side raise":     lateralRaiseEx,
+			"side raises":    lateralRaiseEx,
+
+			// shrugEx
+			"shrug":  shrugEx,
+			"shrugs": shrugEx,
+
 			// all
 			"all":        allEx,
 			"everything": allEx,
@@ -671,36 +943,70 @@ var (
 
 	exTextByLang = map[language]map[Exercise]string{
 		langRU: {
-			pullUpEx:       "подтягивания",
-			muscleUpEx:     "выход силы",
-			pushUpEx:       "отжимания",
-			dipsEx:         "брусья",
-			absEx:          "пресс",
-			squatEx:        "приседания",
-			lungeEx:        "выпады",
-			burpeeEx:       "бёрпи",
-			skippingRopeEx: "скакалка",
-			joggingEx:      "бег",
-			benchPressEx:   "жим лёжа",
-			deadliftEx:     "становая тяга",
-			barbellSquatEx: "присед со штангой",
-			plankEx:        "планка",
+			pullUpEx:           "подтягивания",
+			muscleUpEx:         "выход силы",
+			pushUpEx:           "отжимания",
+			dipsEx:             "брусья",
+			absEx:              "пресс",
+			squatEx:            "приседания",
+			lungeEx:            "выпады",
+			burpeeEx:           "бёрпи",
+			skippingRopeEx:     "скакалка",
+			hyperextensionEx:   "гиперэкстензия",
+			legRaiseEx:         "подъём ног",
+			joggingEx:          "бег",
+			plankEx:            "планка",
+			benchPressEx:       "жим лёжа",
+			deadliftEx:         "становая тяга",
+			barbellSquatEx:     "присед со штангой",
+			latPulldownEx:      "тяга верхнего блока",
+			legPressEx:         "жим ногами",
+			preacherCurlEx:     "скамья Скотта",
+			shoulderPressEx:    "жим стоя",
+			bentOverRowEx:      "тяга в наклоне",
+			dumbbellCurlEx:     "подъём на бицепс",
+			legExtensionEx:     "разгибание ног",
+			legCurlEx:          "сгибание ног",
+			seatedRowEx:        "тяга нижнего блока",
+			chestFlyEx:         "сведение рук",
+			tricepPushdownEx:   "разгибание на трицепс",
+			romanianDeadliftEx: "румынская тяга",
+			hipThrustEx:        "ягодичный мост",
+			lateralRaiseEx:     "махи гантелями",
+			shrugEx:            "шраги",
 		},
 		langEN: {
-			pullUpEx:       "pull-ups",
-			muscleUpEx:     "muscle-ups",
-			pushUpEx:       "push-ups",
-			dipsEx:         "dips",
-			absEx:          "abs",
-			squatEx:        "squats",
-			lungeEx:        "lunges",
-			burpeeEx:       "burpee",
-			skippingRopeEx: "skipping rope",
-			joggingEx:      "jogging",
-			benchPressEx:   "bench press",
-			deadliftEx:     "deadlift",
-			barbellSquatEx: "barbell squat",
-			plankEx:        "plank",
+			pullUpEx:           "pull-ups",
+			muscleUpEx:         "muscle-ups",
+			pushUpEx:           "push-ups",
+			dipsEx:             "dips",
+			absEx:              "abs",
+			squatEx:            "squats",
+			lungeEx:            "lunges",
+			burpeeEx:           "burpee",
+			skippingRopeEx:     "skipping rope",
+			hyperextensionEx:   "hyperextension",
+			legRaiseEx:         "leg raise",
+			joggingEx:          "jogging",
+			plankEx:            "plank",
+			benchPressEx:       "bench press",
+			deadliftEx:         "deadlift",
+			barbellSquatEx:     "barbell squat",
+			latPulldownEx:      "lat pulldown",
+			legPressEx:         "leg press",
+			preacherCurlEx:     "preacher curl",
+			shoulderPressEx:    "shoulder press",
+			bentOverRowEx:      "bent-over row",
+			dumbbellCurlEx:     "dumbbell curl",
+			legExtensionEx:     "leg extension",
+			legCurlEx:          "leg curl",
+			seatedRowEx:        "seated row",
+			chestFlyEx:         "chest fly",
+			tricepPushdownEx:   "tricep pushdown",
+			romanianDeadliftEx: "romanian deadlift",
+			hipThrustEx:        "hip thrust",
+			lateralRaiseEx:     "lateral raise",
+			shrugEx:            "shrugs",
 		},
 	}
 	periodTextByLang = map[language]map[textPeriod]string{
@@ -932,11 +1238,31 @@ func allPeriodsByLang(lang language) string {
 }
 
 var exerciseCategoryMap = map[Exercise]ExerciseCategory{
-	benchPressEx:   CategoryRepsWeight,
-	deadliftEx:     CategoryRepsWeight,
-	barbellSquatEx: CategoryRepsWeight,
-	joggingEx:      CategoryDistTime,
-	plankEx:        CategoryDuration,
+	// CategoryRepsWeight
+	benchPressEx:       CategoryRepsWeight,
+	deadliftEx:         CategoryRepsWeight,
+	barbellSquatEx:     CategoryRepsWeight,
+	latPulldownEx:      CategoryRepsWeight,
+	legPressEx:         CategoryRepsWeight,
+	preacherCurlEx:     CategoryRepsWeight,
+	shoulderPressEx:    CategoryRepsWeight,
+	bentOverRowEx:      CategoryRepsWeight,
+	dumbbellCurlEx:     CategoryRepsWeight,
+	legExtensionEx:     CategoryRepsWeight,
+	legCurlEx:          CategoryRepsWeight,
+	seatedRowEx:        CategoryRepsWeight,
+	chestFlyEx:         CategoryRepsWeight,
+	tricepPushdownEx:   CategoryRepsWeight,
+	romanianDeadliftEx: CategoryRepsWeight,
+	hipThrustEx:        CategoryRepsWeight,
+	lateralRaiseEx:     CategoryRepsWeight,
+	shrugEx:            CategoryRepsWeight,
+
+	// CategoryDistTime
+	joggingEx: CategoryDistTime,
+
+	// CategoryDuration
+	plankEx: CategoryDuration,
 }
 
 var unitSuffixByLang = map[language]map[string]UnitDef{
