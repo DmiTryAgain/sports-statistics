@@ -372,6 +372,7 @@ var (
 			"поднятие ног в висе": legRaiseEx,
 
 			// latPulldownEx
+			"тягу верхнего блока": latPulldownEx,
 			"тяга верхнего блока": latPulldownEx,
 			"тяга верхнева блока": latPulldownEx,
 			"тяга верхнего блоко": latPulldownEx,
@@ -1091,31 +1092,38 @@ var (
 			distanceRequired: "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
 			paramInvalid:     "Не удалось распознать параметр: %s",
 			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
-				"Ты же ведь занимаешься спортом, верно?🤔\n" +
-				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n" +
+				"Ты же ведь занимаешься спортом, верно?🤔\n\n" +
+				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n\n" +
 				"Список поддерживаемых команд:\n" +
-				"На добавление: `Сделал` или `Добавь`\n" +
-				"На показ статистики: `Покажи`\n" +
-				"Чтобы посмотреть помощь по каждой комманде, отправь: `помощь` *название команды*\n" +
+				"• Добавить результат: `Сделал` или `Добавь`\n" +
+				"• Показать статистику: `Покажи`\n" +
+				"• Справка: `Помощь`\n\n" +
+				"Чтобы посмотреть помощь по конкретной команде, отправь: `помощь` *название команды*\n" +
 				"Например: `Помощь Добавь`",
-			addHelpMsg: "Чтобы записать результаты, напиши ключевое слово (команду) на добавление упражнения `сделал`. Затем, через " +
-				"пробел укажи выполненное упражнение. Далее укажи сделанное количество.\n" +
-				"Например, ты подтянулся 10 раз. Чтобы я всё корректно записал, напиши мне:\n" +
-				"`@%s сделал подтягивание 10`",
-			showHelpMsg: "Чтобы показать статистику, напиши ключевое слово (команду) `Покажи`. Затем укажи упражнение.\n" +
-				"*Можно ввести несколько, через запятую*, например, `подтягивание, отжимание`.\n" +
-				"Далее укажи период, за который ты хочешь посмотреть статистику. Периодов можно указывать " +
-				"несколько через используя пробелы.\n" +
-				"Например, нужно вывести статистику по подтягиваниям за сегодня, за 15.10.2022, " +
-				"за период с 01.10.2022 по 10.10.2022. Чтобы периоды обработались корректно, введи периоды" +
-				"следующим образом:\n" +
-				"`за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n" +
-				"Некорректные периоды будут проигнорированы и выведены. Если при " +
-				"вводе интервала дата *от* окажется больше даты *до*, они поменяются местами и результат за этот " +
-				"период будет найден корректно.\n" +
-				"В итоге полная корректная команда будет выглядеть следующим образом: \n" +
-				"`@%s покажи подтягивание, отжимание за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n",
-			helpHelpMsg: "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь команде помощи🤔",
+			addHelpMsg: "Чтобы записать результаты, напиши команду `сделал`, затем упражнение и параметры.\n\n" +
+				"*Обычные упражнения* — укажи количество повторений:\n" +
+				"`@%[1]s сделал подтягивания 10`\n" +
+				"`@%[1]s сделал отжимания 20`\n\n" +
+				"*Упражнения с весом* — укажи вес с суффиксом (кг, г) и количество:\n" +
+				"`@%[1]s сделал жим 80кг 10`\n" +
+				"`@%[1]s сделал становую тягу 100кг 5`\n" +
+				"`@%[1]s сделал тягу верхнего блока 60кг 12`\n\n" +
+				"*Бег* — укажи дистанцию (км, м) и время (ч, мин, сек):\n" +
+				"`@%[1]s сделал бег 5км 25мин`\n\n" +
+				"*Планка* — укажи время:\n" +
+				"`@%[1]s сделал планку 1мин 30сек`\n",
+			showHelpMsg: "Чтобы показать статистику, напиши команду `Покажи`, затем упражнение и период.\n\n" +
+				"*Можно указать несколько упражнений через пробел:*\n" +
+				"`@%[1]s покажи подтягивания отжимания за неделю`\n\n" +
+				"*Или всё сразу:*\n" +
+				"`@%[1]s покажи всё за сегодня`\n\n" +
+				"*Поддерживаемые периоды:* сегодня, вчера, позавчера, неделя, месяц, год, всё время.\n" +
+				"Также можно указать точную дату или интервал:\n" +
+				"`за 15.10.2025`\n" +
+				"`за 01.10.2025-10.10.2025`\n\n" +
+				"Полный пример:\n" +
+				"`@%[1]s покажи подтягивания отжимания за сегодня за 01.10.2025-10.10.2025`\n",
+			helpHelpMsg: "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь к команде помощи🤔",
 			errMsg:      "❌ Произошла ошибка. Попробуйте позже",
 		},
 		langEN: {
@@ -1143,30 +1151,39 @@ var (
 			durationRequired: "Duration is required for this exercise. Example: plank 90sec",
 			distanceRequired: "Distance is required for this exercise. Example: run 5km 25min",
 			paramInvalid:     "Can't recognize parameter: %s",
-			commonHelpMsg: "Hi there! I can keep your training statistic.\n" +
-				"You do sports, right?🤔\n" +
-				"Write me direct messages. Mention me in groups like this: `@%s`\n" +
-				"List supported commands: \n" +
-				"To add: `Add` or `Store` \n" +
-				"To show statistic: `Show` \n" +
-				"To get help for each command send: `help` *cmd name*\n" +
-				"For instance: `Help add`",
-			addHelpMsg: "To write statistic, write a message with key word (command) `add`. Then using spaces" +
-				"write an exercise you done. Then write done reps. \n" +
-				"For instance, you did 10 pull-ups. To store it correctly, write me\n" +
-				"`@%s add push-ups 10`",
-			showHelpMsg: "Write `Show` to show statistic, then write an exercise.\n" +
-				"*you can write some exercises using spaces*, e.g. `pull-ups, push-ups`.\n" +
-				"Then write a period you want to show a statistic. You can write some periods using spaces.\n " +
-				"For instance, you want to watch a statistic of pull-ups for today, for 15.10.2022 and " +
-				"from 01.10.2022 to 10.10.2022. I can handle it correctly if you write them like this:\n" +
-				"`for today, for 15.10.2022, 01.10.2022-10.10.2022`\n" +
-				"A wrong period will be ignored and printed." +
-				"If you write an interval where *from* date later than *to* date, they will swap places and the result" +
-				"will be found correctly." +
-				"The full correct example is below:\n" +
-				"`@%s show push-ups, pull-ups for today, for 15.10.2022, 01.10.2022-10.10.2022`\n",
-			helpHelpMsg: "Help for the help command is not provided. How did you guess to ask help to help command?🤔",
+			commonHelpMsg: "Hi there! I can keep your training statistics.\n" +
+				"You do sports, right?🤔\n\n" +
+				"Write me direct messages. In groups, mention me like this: `@%s`\n\n" +
+				"Supported commands:\n" +
+				"• Add a result: `Add` or `Done`\n" +
+				"• Show statistics: `Show`\n" +
+				"• Help: `Help`\n\n" +
+				"To get help for a specific command, send: `help` *command name*\n" +
+				"For example: `Help add`",
+			addHelpMsg: "To record a result, write the command `add`, then the exercise and its parameters.\n\n" +
+				"*Basic exercises* — specify the number of reps:\n" +
+				"`@%[1]s add pull-ups 10`\n" +
+				"`@%[1]s add push-ups 20`\n\n" +
+				"*Weighted exercises* — specify weight with a suffix (kg, lbs) and reps:\n" +
+				"`@%[1]s add bench press 80kg 10`\n" +
+				"`@%[1]s add deadlift 100kg 5`\n" +
+				"`@%[1]s add lat pulldown 60kg 12`\n\n" +
+				"*Running* — specify distance (km, m) and time (h, min, sec):\n" +
+				"`@%[1]s add jogging 5km 25min`\n\n" +
+				"*Plank* — specify duration:\n" +
+				"`@%[1]s add plank 1min 30sec`\n",
+			showHelpMsg: "To show statistics, write the command `Show`, then an exercise and a period.\n\n" +
+				"*You can specify multiple exercises separated by spaces:*\n" +
+				"`@%[1]s show pull-ups push-ups for week`\n\n" +
+				"*Or everything at once:*\n" +
+				"`@%[1]s show all for today`\n\n" +
+				"*Supported periods:* today, yesterday, week, month, year, all.\n" +
+				"You can also specify an exact date or a range:\n" +
+				"`for 15.10.2025`\n" +
+				"`for 01.10.2025-10.10.2025`\n\n" +
+				"Full example:\n" +
+				"`@%[1]s show pull-ups push-ups for today for 01.10.2025-10.10.2025`\n",
+			helpHelpMsg: "Help for the help command is not provided. How did you even think to ask for help on the help command?🤔",
 			errMsg:      "❌ An error occurred. Try again later",
 		},
 	}
