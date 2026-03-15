@@ -1062,11 +1062,38 @@ const (
 	showHelpMsg
 	helpHelpMsg
 	errMsg
+
+	// ReplyKeyboard кнопки
+	addBtn
+	showBtn
+	helpBtn
+
+	// Сообщения для пошагового диалога
+	welcomeMsg
+	chooseExercise
+	chooseExerciseOrText
+	yourFrequent
+	chooseWeight
+	chooseCount
+	chooseDistance
+	chooseDuration
+	enterCustomWeight
+	enterCustomCount
+	enterCustomDistance
+	enterCustomDuration
+	customInputBtn
+	cancelBtn
+	moreBtn
+	backBtn
+	allExBtn
+	choosePeriod
+	addedConfirmation
+	orWriteText
 )
 
 var (
 	messagesByLang = map[language]map[int]string{
-		langRU: {
+		langRU: { //nolint:dupl
 			emptyMessage:     "Чё?",
 			listCmd:          "Список поддерживаемых команд",
 			listEx:           "Список поддерживаемых упражнений",
@@ -1125,8 +1152,34 @@ var (
 				"`@%[1]s покажи подтягивания отжимания за сегодня за 01.10.2025-10.10.2025`\n",
 			helpHelpMsg: "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь к команде помощи🤔",
 			errMsg:      "❌ Произошла ошибка. Попробуйте позже",
+
+			addBtn:  "📝 Добавить",
+			showBtn: "📊 Статистика",
+			helpBtn: "❓ Помощь",
+
+			welcomeMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
+				"Используй кнопки внизу для быстрого доступа к командам.",
+			chooseExercise:       "Выбери упражнение:",
+			chooseExerciseOrText: "Выбери упражнение или напиши текстом.",
+			yourFrequent:         "Твои частые:",
+			chooseWeight:         "%s — укажи вес:",
+			chooseCount:          "%s — сколько повторений?",
+			chooseDistance:       "%s — укажи дистанцию:",
+			chooseDuration:       "%s — укажи время:",
+			enterCustomWeight:    "Введи вес (например: 85кг или 85)",
+			enterCustomCount:     "Введи количество повторений",
+			enterCustomDistance:  "Введи дистанцию (например: 5км или 5000м)",
+			enterCustomDuration:  "Введи время (например: 25мин или 90сек)",
+			customInputBtn:       "Другой",
+			cancelBtn:            "Отмена",
+			moreBtn:              "Ещё >>",
+			backBtn:              "<< Назад",
+			allExBtn:             "Всё",
+			choosePeriod:         "%s — за какой период?",
+			addedConfirmation:    "Добавлено ✅ %s: %s",
+			orWriteText:          "Или напиши текстом",
 		},
-		langEN: {
+		langEN: { //nolint:dupl
 			emptyMessage:     "What?",
 			listCmd:          "Supported commands",
 			listEx:           "Supported exercises",
@@ -1185,6 +1238,32 @@ var (
 				"`@%[1]s show pull-ups push-ups for today for 01.10.2025-10.10.2025`\n",
 			helpHelpMsg: "Help for the help command is not provided. How did you even think to ask for help on the help command?🤔",
 			errMsg:      "❌ An error occurred. Try again later",
+
+			addBtn:  "📝 Add",
+			showBtn: "📊 Statistics",
+			helpBtn: "❓ Help",
+
+			welcomeMsg: "Hi there! I can keep your training statistics.\n" +
+				"Use the buttons below for quick access to commands.",
+			chooseExercise:       "Choose an exercise:",
+			chooseExerciseOrText: "Choose an exercise or type it.",
+			yourFrequent:         "Your frequent:",
+			chooseWeight:         "%s — enter weight:",
+			chooseCount:          "%s — how many reps?",
+			chooseDistance:       "%s — enter distance:",
+			chooseDuration:       "%s — enter duration:",
+			enterCustomWeight:    "Enter weight (e.g. 85kg or 85)",
+			enterCustomCount:     "Enter the number of reps",
+			enterCustomDistance:  "Enter distance (e.g. 5km or 5000m)",
+			enterCustomDuration:  "Enter duration (e.g. 25min or 90sec)",
+			customInputBtn:       "Other",
+			cancelBtn:            "Cancel",
+			moreBtn:              "More >>",
+			backBtn:              "<< Back",
+			allExBtn:             "All",
+			choosePeriod:         "%s — for what period?",
+			addedConfirmation:    "Added ✅ %s: %s",
+			orWriteText:          "Or type it",
 		},
 	}
 
@@ -1253,6 +1332,37 @@ func allPeriodsByLang(lang language) string {
 
 	return b.String()
 }
+
+var replyButtonCmd = map[language]map[string]cmd{
+	langRU: {
+		"📝 Добавить":   addCmd,
+		"📊 Статистика": showCmd,
+		"❓ Помощь":     helpCmd,
+	},
+	langEN: {
+		"📝 Add":        addCmd,
+		"📊 Statistics": showCmd,
+		"❓ Help":       helpCmd,
+	},
+}
+
+var exerciseOrder = []Exercise{
+	// Reps — уличные / базовые
+	pullUpEx, pushUpEx, dipsEx, absEx, squatEx, lungeEx,
+	burpeeEx, skippingRopeEx, muscleUpEx, hyperextensionEx, legRaiseEx,
+	// Reps+Weight — зал
+	benchPressEx, deadliftEx, barbellSquatEx, shoulderPressEx,
+	bentOverRowEx, latPulldownEx, seatedRowEx, legPressEx,
+	dumbbellCurlEx, preacherCurlEx, tricepPushdownEx,
+	legExtensionEx, legCurlEx, chestFlyEx,
+	romanianDeadliftEx, hipThrustEx, lateralRaiseEx, shrugEx,
+	// Duration
+	plankEx,
+	// Distance
+	joggingEx,
+}
+
+const exercisesPerPage = 9
 
 var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 	// CategoryRepsWeight

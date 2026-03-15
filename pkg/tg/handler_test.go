@@ -1,6 +1,7 @@
 package tg
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"strings"
@@ -52,7 +53,7 @@ func TestMain(m *testing.M) {
 	//}
 
 	dbc = initTestDB()
-	mh = New(embedlog.NewDevLogger(), dbc, db.NewStatisticRepo(pgConn), nil, botCfg)
+	mh = New(context.Background(), embedlog.NewDevLogger(), dbc, db.NewStatisticRepo(pgConn), nil, botCfg)
 	m.Run()
 }
 
@@ -336,47 +337,47 @@ func TestParseExerciseParams(t *testing.T) {
 		{
 			name:  "reps backward compat",
 			words: []string{"10"}, category: CategoryReps, lang: langRU,
-			wantCount: ptrFloat64(10),
+			wantCount: ptr[float64](10),
 		},
 		{
 			name:  "reps weight joined suffix",
 			words: []string{"80кг", "10"}, category: CategoryRepsWeight, lang: langRU,
-			wantCount: ptrFloat64(10), wantWeight: ptrFloat64(80),
+			wantCount: ptr[float64](10), wantWeight: ptr[float64](80),
 		},
 		{
 			name:  "reps weight separate suffix",
 			words: []string{"80", "кг", "10"}, category: CategoryRepsWeight, lang: langRU,
-			wantCount: ptrFloat64(10), wantWeight: ptrFloat64(80),
+			wantCount: ptr[float64](10), wantWeight: ptr[float64](80),
 		},
 		{
 			name:  "reps weight explicit count suffix",
 			words: []string{"80кг", "10раз"}, category: CategoryRepsWeight, lang: langRU,
-			wantCount: ptrFloat64(10), wantWeight: ptrFloat64(80),
+			wantCount: ptr[float64](10), wantWeight: ptr[float64](80),
 		},
 		{
 			name:  "dist time composite",
 			words: []string{"5км", "1ч", "30мин"}, category: CategoryDistTime, lang: langRU,
-			wantDist: ptrFloat64(5000), wantDur: ptrFloat64(5400),
+			wantDist: ptr[float64](5000), wantDur: ptr[float64](5400),
 		},
 		{
 			name:  "dist time separate",
 			words: []string{"5", "км", "25", "мин"}, category: CategoryDistTime, lang: langRU,
-			wantDist: ptrFloat64(5000), wantDur: ptrFloat64(1500),
+			wantDist: ptr[float64](5000), wantDur: ptr[float64](1500),
 		},
 		{
 			name:  "duration only",
 			words: []string{"90сек"}, category: CategoryDuration, lang: langRU,
-			wantDur: ptrFloat64(90),
+			wantDur: ptr[float64](90),
 		},
 		{
 			name:  "duration composite hours and min",
 			words: []string{"1ч", "30мин"}, category: CategoryDuration, lang: langRU,
-			wantDur: ptrFloat64(5400),
+			wantDur: ptr[float64](5400),
 		},
 		{
 			name:  "en weight reps",
 			words: []string{"80kg", "10"}, category: CategoryRepsWeight, lang: langEN,
-			wantCount: ptrFloat64(10), wantWeight: ptrFloat64(80),
+			wantCount: ptr[float64](10), wantWeight: ptr[float64](80),
 		},
 		{
 			name:  "missing count for reps weight",
@@ -488,8 +489,6 @@ func floatPtrEqual(a, b *float64) bool {
 	}
 	return *a == *b
 }
-
-func ptr[T any](t T) *T { return &t }
 
 func TestMessageHandler_handleAdd(t *testing.T) {
 	t.Skip()

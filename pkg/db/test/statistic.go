@@ -45,7 +45,7 @@ func Statistic(t *testing.T, dbo orm.DB, in *db.Statistic, ops ...StatisticOpFun
 	}
 
 	// Create the main entity
-	statistic, err := repo.AddStatistic(t.Context(), in)
+	statistic, err := repo.AddStatistic(t.Context(), in, db.WithoutColumns())
 	if err != nil {
 		t.Fatal(err)
 	}

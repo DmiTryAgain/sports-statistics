@@ -58,6 +58,28 @@ type ParsedParams struct {
 	DurationSec *float64 // длительность в секундах (нормализована)
 }
 
+func (pp *ParsedParams) String() string {
+	var s []string
+	if pp.Count != nil {
+		s = append(s, fmt.Sprintf("count: %f", *pp.Count))
+	}
+	if pp.WeightKg != nil {
+		s = append(s, fmt.Sprintf("weight: %f", *pp.WeightKg))
+	}
+	if pp.DistanceM != nil {
+		s = append(s, fmt.Sprintf("distance: %f", *pp.DistanceM))
+	}
+	if pp.DurationSec != nil {
+		s = append(s, fmt.Sprintf("duration: %f", *pp.DurationSec))
+	}
+
+	if len(s) == 0 {
+		return "empty params"
+	}
+
+	return strings.Join(s, " ")
+}
+
 // ToDBParams конвертирует в структуру для БД
 func (pp *ParsedParams) ToDBParams() *db.StatisticParams {
 	p := &db.StatisticParams{
@@ -78,8 +100,6 @@ func (pp *ParsedParams) CountOrDefault() float64 {
 	}
 	return 1
 }
-
-func ptrFloat64(v float64) *float64 { return &v }
 
 type allChecker interface {
 	isAll() bool
@@ -111,6 +131,16 @@ func (e Exercise) Category() ExerciseCategory {
 }
 
 type Exercises []Exercise
+
+func (e Exercises) String() string {
+	b := new(strings.Builder)
+	for i := range e {
+		b.WriteString("exercise: ")
+		b.WriteString(e[i].String())
+	}
+
+	return b.String()
+}
 
 func (e Exercises) StringSlice() []string {
 	res := make([]string, len(e))

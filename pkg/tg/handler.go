@@ -35,15 +35,17 @@ type MessageHandler struct {
 	statRepo db.StatisticRepo
 	tgBot    *tgbotapi.BotAPI
 	cfg      Bot
+	sessions *SessionStore
 }
 
-func New(logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
+func New(ctx context.Context, logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
 	h := &MessageHandler{
 		Logger:   logger,
 		dbc:      db,
 		cfg:      cfg,
 		tgBot:    tgBot,
 		statRepo: statRepo,
+		sessions: NewSessionStore(ctx),
 	}
 
 	return h
@@ -64,7 +66,19 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 		go func() {
 			defer func() { <-limit }() // Освобождаем канал после успешного завершения горутины
 
+			// Обработка inline-кнопок
+			if upd.CallbackQuery != nil {
+				m.handleCallback(ctx, upd)
+				return
+			}
+
 			if upd.Message == nil {
+				return
+			}
+
+			// Обработка /start
+			if upd.Message.IsCommand() && upd.Message.Command() == "start" {
+				m.handleStart(ctx, upd)
 				return
 			}
 
@@ -77,6 +91,13 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 
 			// Достаём пользователя
 			userID := strconv.FormatInt(upd.Message.From.ID, 10)
+
+			// Проверяем, не нажал ли пользователь ReplyKeyboard кнопку
+			if c, lang, ok := m.detectReplyButton(upd.Message.Text); ok {
+				m.handleReplyButton(ctx, upd, userID, lang, c)
+				return
+			}
+
 			// Чистим текст от мусора
 			msgText := m.clearRawMsg(lowerText)
 			// Определяем язык
@@ -91,6 +112,12 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 			if msgText == "" {
 				m.Print(ctx, "received empty message", "rawMsg", upd.Message.Text, "userID", userID)
 				m.sendMsg(upd, messagesByLang[lang][emptyMessage])
+				return
+			}
+
+			// Проверяем, есть ли активная сессия
+			if session := m.sessions.Get(userID); session != nil && session.State != StateIdle {
+				m.handleSessionText(ctx, upd, session, userID, msgText)
 				return
 			}
 
@@ -247,25 +274,25 @@ func (pp *ParsedParams) addParam(pt ParamType, val float64) {
 	switch pt {
 	case ParamCount:
 		if pp.Count == nil {
-			pp.Count = ptrFloat64(val)
+			pp.Count = ptr(val)
 		} else {
 			*pp.Count += val
 		}
 	case ParamWeight:
 		if pp.WeightKg == nil {
-			pp.WeightKg = ptrFloat64(val)
+			pp.WeightKg = ptr(val)
 		} else {
 			*pp.WeightKg += val
 		}
 	case ParamDistance:
 		if pp.DistanceM == nil {
-			pp.DistanceM = ptrFloat64(val)
+			pp.DistanceM = ptr(val)
 		} else {
 			*pp.DistanceM += val
 		}
 	case ParamDuration:
 		if pp.DurationSec == nil {
-			pp.DurationSec = ptrFloat64(val)
+			pp.DurationSec = ptr(val)
 		} else {
 			*pp.DurationSec += val
 		}
@@ -783,3 +810,702 @@ func (m *MessageHandler) handleHelp(ctx context.Context, rawMsg string, lang lan
 		return fmt.Sprintf("`%s` %s", rawMsg, messagesByLang[lang][cmdNotSupported]), nil
 	}
 }
+
+// detectReplyButton проверяет, совпадает ли текст с одной из ReplyKeyboard кнопок.
+// Возвращает команду, язык и true, если совпадение найдено.
+func (m *MessageHandler) detectReplyButton(text string) (cmd, language, bool) {
+	for lang, buttons := range replyButtonCmd {
+		if c, ok := buttons[text]; ok {
+			return c, lang, true
+		}
+	}
+	return unknownCmd, "", false
+}
+
+// handleStart обрабатывает команду /start — отправляет приветствие и ReplyKeyboard
+func (m *MessageHandler) handleStart(ctx context.Context, upd tgbotapi.Update) {
+	lang := langRU
+	if upd.Message.From != nil && upd.Message.From.LanguageCode == "en" {
+		lang = langEN
+	}
+
+	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, messagesByLang[lang][welcomeMsg])
+	kb := replyKeyboard(lang)
+	kb.ResizeKeyboard = true
+	msg.ReplyMarkup = kb
+	msg.ParseMode = m.cfg.ReplyFormat
+	if _, err := m.tgBot.Send(msg); err != nil {
+		m.Error(ctx, "failed to send start message", "err", err)
+	}
+}
+
+// handleReplyButton обрабатывает нажатие ReplyKeyboard кнопки
+func (m *MessageHandler) handleReplyButton(ctx context.Context, upd tgbotapi.Update, userID string, lang language, c cmd) {
+	switch c {
+	case addCmd:
+		m.showAddExerciseScreen(ctx, upd, userID, lang)
+	case showCmd:
+		m.showStatExerciseScreen(ctx, upd, userID, lang)
+	case helpCmd:
+		text := fmt.Sprintf(messagesByLang[lang][commonHelpMsg], m.cfg.Name)
+		m.sendMsg(upd, text)
+	}
+}
+
+// showAddExerciseScreen показывает экран выбора упражнения с Quick-Add кнопками
+func (m *MessageHandler) showAddExerciseScreen(ctx context.Context, upd tgbotapi.Update, userID string, lang language) {
+	// Получаем частые упражнения пользователя
+	frequent, err := m.statRepo.FrequentExercisesByUser(ctx, userID, 5)
+	if err != nil {
+		m.Error(ctx, "fetch frequent exercises", "err", err)
+	}
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+
+	// Quick-Add кнопки
+	qaRows := quickAddInlineKeyboard(frequent, lang)
+	if len(qaRows) > 0 {
+		rows = append(rows, qaRows...)
+	}
+
+	// Кнопки упражнений (первая страница)
+	exKb := exerciseInlineKeyboard(0, lang, "add")
+	rows = append(rows, exKb.InlineKeyboard...)
+
+	kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
+
+	text := messagesByLang[lang][chooseExerciseOrText]
+	if len(qaRows) > 0 {
+		text = messagesByLang[lang][yourFrequent] + "\n" + text
+	}
+
+	msgID := m.sendMsgWithKeyboard(upd, text, kb)
+
+	session := &UserSession{
+		State:            StateAwaitExercise,
+		Lang:             lang,
+		LastBotMessageID: msgID,
+		ChatID:           upd.Message.Chat.ID,
+	}
+	m.sessions.Set(userID, session)
+}
+
+// showStatExerciseScreen показывает экран выбора упражнения для статистики
+func (m *MessageHandler) showStatExerciseScreen(ctx context.Context, upd tgbotapi.Update, userID string, lang language) {
+	exercises, err := m.statRepo.UniqueExercisesByUser(ctx, userID)
+	if err != nil {
+		m.Error(ctx, "fetch unique exercises", "err", err)
+		m.sendMsg(upd, messagesByLang[lang][errMsg])
+		return
+	}
+
+	if len(exercises) == 0 {
+		m.sendMsg(upd, messagesByLang[lang][nothingFound])
+		return
+	}
+
+	kb := showExerciseInlineKeyboard(exercises, lang)
+	text := messagesByLang[lang][chooseExercise]
+	msgID := m.sendMsgWithKeyboard(upd, text, kb)
+
+	session := &UserSession{
+		State:            StateShowAwaitExercise,
+		Lang:             lang,
+		LastBotMessageID: msgID,
+		ChatID:           upd.Message.Chat.ID,
+	}
+	m.sessions.Set(userID, session)
+}
+
+// handleCallback обрабатывает нажатие inline-кнопки
+func (m *MessageHandler) handleCallback(ctx context.Context, upd tgbotapi.Update) {
+	cb := upd.CallbackQuery
+	userID := strconv.FormatInt(cb.From.ID, 10)
+
+	action, err := parseCallbackData(cb.Data)
+	if err != nil {
+		m.Error(ctx, "parse callback data", "data", cb.Data, "err", err)
+		m.answerCallback(cb.ID, "")
+		return
+	}
+
+	session := m.sessions.Get(userID)
+	if session == nil {
+		session = &UserSession{Lang: langRU}
+	}
+
+	switch action.Type {
+	case cbSelectExercise:
+		m.handleCBSelectExercise(ctx, cb, session, userID, action)
+	case cbSelectWeight:
+		m.handleCBSelectWeight(ctx, cb, session, userID, action)
+	case cbSelectCount:
+		m.handleCBSelectCount(ctx, cb, session, userID, action)
+	case cbSelectDistance:
+		m.handleCBSelectDistance(ctx, cb, session, userID, action)
+	case cbSelectDuration:
+		m.handleCBSelectDuration(ctx, cb, session, userID, action)
+	case cbCustomInput:
+		m.handleCBCustomInput(ctx, cb, session, userID, action)
+	case cbQuickAdd:
+		m.handleCBQuickAdd(ctx, cb, session, userID, action)
+	case cbShowExercise:
+		m.handleCBShowExercise(ctx, cb, session, userID, action)
+	case cbShowAll:
+		m.handleCBShowAll(ctx, cb, session, userID)
+	case cbShowPeriod:
+		m.handleCBShowPeriod(ctx, cb, session, userID, action)
+	case cbCancel:
+		m.handleCBCancel(ctx, cb, session, userID)
+	case cbExercisePage:
+		m.handleCBExercisePage(ctx, cb, session, userID, action)
+	default:
+		m.answerCallback(cb.ID, "")
+	}
+}
+
+// handleCBSelectExercise обрабатывает выбор упражнения
+func (m *MessageHandler) handleCBSelectExercise(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.Exercise = action.Exercise
+	m.sessions.Set(userID, session)
+	m.answerCallback(cb.ID, "")
+	m.advanceAddDialog(ctx, cb, session, userID)
+}
+
+// handleCBSelectWeight обрабатывает выбор веса
+func (m *MessageHandler) handleCBSelectWeight(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.Params.WeightKg = ptr(action.Value)
+	m.sessions.Set(userID, session)
+	m.answerCallback(cb.ID, "")
+	m.advanceAddDialog(ctx, cb, session, userID)
+}
+
+// handleCBSelectCount обрабатывает выбор количества повторений
+func (m *MessageHandler) handleCBSelectCount(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.Params.Count = ptr(action.Value)
+	m.sessions.Set(userID, session)
+	m.answerCallback(cb.ID, "")
+	m.advanceAddDialog(ctx, cb, session, userID)
+}
+
+// handleCBSelectDistance обрабатывает выбор дистанции
+func (m *MessageHandler) handleCBSelectDistance(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.Params.DistanceM = ptr(action.Value)
+	m.sessions.Set(userID, session)
+	m.answerCallback(cb.ID, "")
+	m.advanceAddDialog(ctx, cb, session, userID)
+}
+
+// handleCBSelectDuration обрабатывает выбор длительности
+func (m *MessageHandler) handleCBSelectDuration(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.Params.DurationSec = ptr(action.Value)
+	m.sessions.Set(userID, session)
+	m.answerCallback(cb.ID, "")
+	m.advanceAddDialog(ctx, cb, session, userID)
+}
+
+// handleCBCustomInput обрабатывает нажатие кнопки "Другой"
+func (m *MessageHandler) handleCBCustomInput(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.State = StateAwaitCustomValue
+	session.CustomTarget = action.CustomTarget
+	m.sessions.Set(userID, session)
+
+	var text string
+	switch action.CustomTarget {
+	case TargetWeight:
+		text = messagesByLang[session.Lang][enterCustomWeight]
+	case TargetCount:
+		text = messagesByLang[session.Lang][enterCustomCount]
+	case TargetDistance:
+		text = messagesByLang[session.Lang][enterCustomDistance]
+	case TargetDuration:
+		text = messagesByLang[session.Lang][enterCustomDuration]
+	}
+
+	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text)
+	m.answerCallback(cb.ID, "")
+}
+
+// handleCBQuickAdd обрабатывает Quick-Add кнопку — сразу сохраняем
+func (m *MessageHandler) handleCBQuickAdd(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	_, err := m.statRepo.AddStatistic(ctx, &db.Statistic{
+		TgUserID: userID,
+		Exercise: action.Exercise.String(),
+		Count:    action.Count,
+		Params:   action.Params,
+		StatusID: 1,
+	})
+	if err != nil {
+		m.Error(ctx, "quick add failed", "err", err)
+		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
+		return
+	}
+
+	confirmText := formatAddConfirmation(action.Exercise, action.Count, action.Params, session.Lang)
+	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, confirmText)
+	m.answerCallback(cb.ID, messagesByLang[session.Lang][exAdded])
+	m.sessions.Delete(userID)
+}
+
+// handleCBShowExercise обрабатывает выбор упражнения для статистики
+func (m *MessageHandler) handleCBShowExercise(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	session.State = StateShowAwaitPeriod
+	session.ShowExercises = Exercises{action.Exercise}
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][action.Exercise]
+	if exName == "" {
+		exName = action.Exercise.String()
+	}
+	text := fmt.Sprintf(messagesByLang[session.Lang][choosePeriod], exName)
+	kb := periodInlineKeyboard(session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+	m.answerCallback(cb.ID, "")
+}
+
+// handleCBShowAll обрабатывает кнопку "Всё" для статистики
+func (m *MessageHandler) handleCBShowAll(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	session.State = StateShowAwaitPeriod
+	session.ShowExercises = nil // nil = все упражнения
+	m.sessions.Set(userID, session)
+
+	text := fmt.Sprintf(messagesByLang[session.Lang][choosePeriod], messagesByLang[session.Lang][allExBtn])
+	kb := periodInlineKeyboard(session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+	m.answerCallback(cb.ID, "")
+}
+
+// handleCBShowPeriod обрабатывает выбор периода для статистики
+func (m *MessageHandler) handleCBShowPeriod(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	p, _ := m.periodByText(string(action.Period), time.Now(), session.Lang)
+
+	var periodsFilter periods
+	if !p.IsZero() {
+		periodsFilter = periods{p}
+	}
+
+	s := db.GroupedStatisticSearch{
+		StatisticSearch: db.StatisticSearch{
+			TgUserID:  &userID,
+			Exercises: session.ShowExercises.StringSlice(),
+		},
+		Periods: periodsFilter.ToDB(),
+	}
+
+	stats, err := m.statRepo.GroupedStatisticByFilters(ctx, s)
+	if err != nil {
+		m.Error(ctx, "fetch statistic", "err", err)
+		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
+		return
+	}
+
+	if len(stats) == 0 {
+		m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, messagesByLang[session.Lang][nothingFound])
+		m.answerCallback(cb.ID, "")
+		m.sessions.Delete(userID)
+		return
+	}
+
+	table, err := m.buildTableByStat(ctx, stats, session.Lang)
+	if err != nil {
+		m.Error(ctx, "build table", "err", err)
+		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
+		return
+	}
+
+	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, table)
+	m.answerCallback(cb.ID, "")
+	m.sessions.Delete(userID)
+}
+
+// handleCBCancel обрабатывает кнопку отмены
+func (m *MessageHandler) handleCBCancel(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, messagesByLang[session.Lang][cancelBtn])
+	m.answerCallback(cb.ID, "")
+	m.sessions.Delete(userID)
+}
+
+// handleCBExercisePage обрабатывает переключение страницы упражнений
+func (m *MessageHandler) handleCBExercisePage(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, _ string, action CallbackAction) {
+	kb := exerciseInlineKeyboard(action.Page, session.Lang, action.Context)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, messagesByLang[session.Lang][chooseExercise], kb)
+	m.answerCallback(cb.ID, "")
+}
+
+// advanceAddDialog проверяет, какие параметры ещё не заполнены, и показывает следующий шаг
+func (m *MessageHandler) advanceAddDialog(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	category := session.Exercise.Category()
+	required := category.RequiredParams()
+
+	for _, rp := range required {
+		switch rp {
+		case ParamWeight:
+			if session.Params.WeightKg == nil {
+				m.showWeightSelection(ctx, cb, session, userID)
+				return
+			}
+		case ParamCount:
+			if session.Params.Count == nil {
+				m.showCountSelection(cb, session, userID)
+				return
+			}
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				m.showDistanceSelection(cb, session, userID)
+				return
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				m.showDurationSelection(cb, session, userID)
+				return
+			}
+		}
+	}
+
+	m.saveFromSession(ctx, cb, session, userID)
+}
+
+// showWeightSelection показывает кнопки выбора веса
+func (m *MessageHandler) showWeightSelection(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	weights, err := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
+	if err != nil {
+		m.Error(ctx, "fetch unique weights", "err", err)
+	}
+
+	session.State = StateAwaitWeight
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := weightInlineKeyboard(weights, session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+}
+
+// showCountSelection показывает кнопки выбора количества повторений
+func (m *MessageHandler) showCountSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	session.State = StateAwaitCount
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	var detail string
+	if session.Params.WeightKg != nil {
+		detail = " " + formatWeight(*session.Params.WeightKg, session.Lang)
+	}
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseCount], exName+detail) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := countInlineKeyboard(session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+}
+
+// showDistanceSelection показывает кнопки выбора дистанции
+func (m *MessageHandler) showDistanceSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	session.State = StateAwaitDistance
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := distanceInlineKeyboard(session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+}
+
+// showDurationSelection показывает кнопки выбора длительности
+func (m *MessageHandler) showDurationSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	session.State = StateAwaitDuration
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	var detail string
+	if session.Params.DistanceM != nil {
+		detail = " " + formatDistance(*session.Params.DistanceM, session.Lang)
+	}
+	category := session.Exercise.Category()
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName+detail) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := durationInlineKeyboard(category, session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+}
+
+// saveFromSession сохраняет упражнение из сессии в БД
+func (m *MessageHandler) saveFromSession(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	cnt := session.Params.CountOrDefault()
+
+	_, err := m.statRepo.AddStatistic(ctx, &db.Statistic{
+		TgUserID: userID,
+		Exercise: session.Exercise.String(),
+		Count:    cnt,
+		Params:   session.Params.ToDBParams(),
+		StatusID: 1,
+	})
+	if err != nil {
+		m.Error(ctx, "save from session failed", "err", err)
+		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
+		return
+	}
+
+	confirmText := formatAddConfirmation(session.Exercise, cnt, session.Params.ToDBParams(), session.Lang)
+	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, confirmText)
+	m.answerCallback(cb.ID, messagesByLang[session.Lang][exAdded])
+	m.sessions.Delete(userID)
+}
+
+// handleSessionText обрабатывает текстовый ввод в контексте активной сессии
+func (m *MessageHandler) handleSessionText(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID, text string) {
+	switch session.State {
+	case StateAwaitExercise:
+		// Пытаемся распарсить как полное сообщение добавления
+		result, err := m.handleAdd(ctx, text, userID, session.Lang)
+		if err != nil {
+			m.sendMsg(upd, messagesByLang[session.Lang][errMsg])
+			m.Error(ctx, "session handleAdd", "err", err, "text", text, "user", userID, "session", session.String())
+		} else {
+			m.sendMsg(upd, result)
+		}
+		m.sessions.Delete(userID)
+
+	case StateAwaitCustomValue:
+		m.handleCustomValueInput(ctx, upd, session, userID, text)
+
+	case StateAwaitWeight, StateAwaitCount, StateAwaitDistance, StateAwaitDuration:
+
+		if err := m.handleRemainingParamsText(ctx, upd, session, userID, text); err != nil {
+			m.Error(ctx, "session handleRemainingParamsText", "err", err, "text", text, "user", userID, "session", session.String())
+			m.sendMsg(upd, messagesByLang[session.Lang][errMsg])
+		}
+
+	default:
+		// Нет обработки — fallback на обычную обработку
+		result, err := m.handle(ctx, text, userID, session.Lang)
+		if err != nil {
+			m.sendMsg(upd, messagesByLang[session.Lang][errMsg])
+			m.Error(ctx, "session fallback handle", "err", err, "text", text, "user", userID, "session", session.String())
+		} else if result != "" {
+			m.sendMsg(upd, result)
+		}
+	}
+}
+
+// handleCustomValueInput обрабатывает ручной ввод значения для кнопки "Другой"
+func (m *MessageHandler) handleCustomValueInput(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID, text string) {
+	value, unit, hasUnit, err := parseValueWithUnit(text, session.Lang)
+	if err != nil {
+		m.sendMsg(upd, fmt.Sprintf(messagesByLang[session.Lang][paramInvalid], text))
+		return
+	}
+
+	if hasUnit {
+		// Единица измерения распознана — применяем множитель и записываем по типу параметра
+		session.Params.addParam(unit.ParamType, value*unit.Multiplier)
+	} else {
+		// Голое число — записываем в параметр, соответствующий текущему CustomTarget
+		switch session.CustomTarget {
+		case TargetWeight:
+			session.Params.WeightKg = ptr(value)
+		case TargetCount:
+			session.Params.Count = ptr(value)
+		case TargetDistance:
+			session.Params.DistanceM = ptr(value)
+		case TargetDuration:
+			session.Params.DurationSec = ptr(value)
+		}
+	}
+
+	m.sessions.Set(userID, session)
+
+	// Проверяем, остались ли ещё незаполненные параметры
+	category := session.Exercise.Category()
+	required := category.RequiredParams()
+
+	allFilled := true
+	for _, rp := range required {
+		switch rp {
+		case ParamWeight:
+			if session.Params.WeightKg == nil {
+				allFilled = false
+			}
+		case ParamCount:
+			if session.Params.Count == nil {
+				allFilled = false
+			}
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				allFilled = false
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				allFilled = false
+			}
+		}
+	}
+
+	if allFilled {
+		m.saveFromSessionText(ctx, upd, session, userID)
+		return
+	}
+
+	// Показываем следующий шаг — отправляем новое сообщение с кнопками
+	m.showNextParamAsNewMessage(ctx, upd, session, userID)
+}
+
+// handleRemainingParamsText обрабатывает ввод параметра текстом в контексте ожидания кнопки
+func (m *MessageHandler) handleRemainingParamsText(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID, text string) error {
+	value, unit, hasUnit, err := parseValueWithUnit(text, session.Lang)
+	if err != nil {
+		m.sendMsg(upd, fmt.Sprintf(messagesByLang[session.Lang][paramInvalid], text))
+		// Игнорируем эту ошибку, просто отправим пользователю, что некорректные единицы измерения
+		//nolint:nilerr
+		return nil
+	}
+
+	if hasUnit {
+		session.Params.addParam(unit.ParamType, value*unit.Multiplier)
+	} else {
+		// Голое число — применяем в зависимости от текущего состояния
+		switch session.State {
+		case StateAwaitWeight:
+			session.Params.WeightKg = ptr(value)
+		case StateAwaitCount:
+			session.Params.Count = ptr(value)
+		case StateAwaitDistance:
+			session.Params.DistanceM = ptr(value)
+		case StateAwaitDuration:
+			session.Params.DurationSec = ptr(value)
+		default:
+			return fmt.Errorf("unknown state: %d", session.State)
+		}
+	}
+
+	m.sessions.Set(userID, session)
+
+	// Проверяем, всё ли заполнено
+	category := session.Exercise.Category()
+	if err := session.Params.validate(category); err == nil {
+		m.saveFromSessionText(ctx, upd, session, userID)
+		return nil
+	}
+
+	m.showNextParamAsNewMessage(ctx, upd, session, userID)
+
+	return nil
+}
+
+// saveFromSessionText сохраняет из сессии при текстовом вводе
+func (m *MessageHandler) saveFromSessionText(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) {
+	cnt := session.Params.CountOrDefault()
+
+	_, err := m.statRepo.AddStatistic(ctx, &db.Statistic{
+		TgUserID: userID,
+		Exercise: session.Exercise.String(),
+		Count:    cnt,
+		Params:   session.Params.ToDBParams(),
+		StatusID: 1,
+	})
+	if err != nil {
+		m.Error(ctx, "save from session text failed", "err", err)
+		m.sendMsg(upd, messagesByLang[session.Lang][errMsg])
+		return
+	}
+
+	confirmText := formatAddConfirmation(session.Exercise, cnt, session.Params.ToDBParams(), session.Lang)
+	m.sendMsg(upd, confirmText)
+	m.sessions.Delete(userID)
+}
+
+// showNextParamAsNewMessage показывает следующий необходимый параметр в виде нового сообщения с кнопками
+func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) {
+	category := session.Exercise.Category()
+	required := category.RequiredParams()
+
+	for _, rp := range required {
+		switch rp {
+		case ParamWeight:
+			if session.Params.WeightKg == nil {
+				session.State = StateAwaitWeight
+				m.sessions.Set(userID, session)
+				weights, _ := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseWeight], exName)
+				kb := weightInlineKeyboard(weights, session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return
+			}
+		case ParamCount:
+			if session.Params.Count == nil {
+				session.State = StateAwaitCount
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseCount], exName)
+				kb := countInlineKeyboard(session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return
+			}
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				session.State = StateAwaitDistance
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseDistance], exName)
+				kb := distanceInlineKeyboard(session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				session.State = StateAwaitDuration
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				cat := session.Exercise.Category()
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName)
+				kb := durationInlineKeyboard(cat, session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return
+			}
+		}
+	}
+}
+
+// sendMsgWithKeyboard отправляет сообщение с inline-кнопками и возвращает ID отправленного сообщения
+func (m *MessageHandler) sendMsgWithKeyboard(upd tgbotapi.Update, text string, keyboard tgbotapi.InlineKeyboardMarkup) int {
+	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, text)
+	msg.ReplyMarkup = keyboard
+	msg.ParseMode = m.cfg.ReplyFormat
+	sent, err := m.tgBot.Send(msg)
+	if err != nil {
+		m.Errorf("failed to send message with keyboard: %v", err)
+		return 0
+	}
+	return sent.MessageID
+}
+
+// answerCallback отвечает на callback query (убирает "часики" на кнопке)
+func (m *MessageHandler) answerCallback(callbackID, text string) {
+	callback := tgbotapi.NewCallback(callbackID, text)
+	if _, err := m.tgBot.Request(callback); err != nil {
+		m.Errorf("failed to answer callback: %v", err)
+	}
+}
+
+// editMessageWithKeyboard редактирует сообщение бота, обновляя текст и кнопки
+func (m *MessageHandler) editMessageWithKeyboard(chatID int64, messageID int, text string, keyboard tgbotapi.InlineKeyboardMarkup) {
+	edit := tgbotapi.NewEditMessageTextAndMarkup(chatID, messageID, text, keyboard)
+	edit.ParseMode = m.cfg.ReplyFormat
+	if _, err := m.tgBot.Send(edit); err != nil {
+		m.Errorf("failed to edit message with keyboard: %v", err)
+	}
+}
+
+// editMessageRemoveKeyboard редактирует сообщение, убирая кнопки
+func (m *MessageHandler) editMessageRemoveKeyboard(chatID int64, messageID int, text string) {
+	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+	edit.ParseMode = m.cfg.ReplyFormat
+	if _, err := m.tgBot.Send(edit); err != nil {
+		m.Errorf("failed to edit message: %v", err)
+	}
+}
+
+func ptr[T any](t T) *T { return &t }

@@ -54,7 +54,7 @@ func main() {
 		dbc.AddQueryHook(db.NewQueryLogger(sl))
 	}
 
-	a, err := app.New(sl, dbc, dbconn, cfg)
+	a, err := app.New(ctx, sl, dbc, dbconn, cfg)
 	if err != nil {
 		exitOnError(err)
 	}
