@@ -7,7 +7,7 @@ import (
 )
 
 func TestSessionStore_GetSetDelete(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	ss := NewSessionStore(ctx)
@@ -40,7 +40,7 @@ func TestSessionStore_GetSetDelete(t *testing.T) {
 }
 
 func TestSessionStore_Expiry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	ss := NewSessionStore(ctx)
