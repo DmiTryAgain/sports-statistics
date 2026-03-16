@@ -10,10 +10,13 @@ import (
 )
 
 type GroupedStatistic struct {
-	TgUserID string  `pg:"tgUserId,use_zero"`
-	Exercise string  `pg:"exercise,use_zero"`
-	SumCount float64 `pg:"sumCount,use_zero"`
-	Sets     int     `pg:"sets,use_zero"`
+	TgUserID       string   `pg:"tgUserId,use_zero"`
+	Exercise       string   `pg:"exercise,use_zero"`
+	SumCount       float64  `pg:"sumCount,use_zero"`
+	Sets           int      `pg:"sets,use_zero"`
+	WeightKg       *float64 `pg:"weightKg"`
+	DistanceM      *float64 `pg:"distanceM"`
+	SumDurationSec *float64 `pg:"sumDurationSec"`
 }
 
 type Period struct {
@@ -28,7 +31,12 @@ type GroupedStatisticSearch struct {
 func (sr StatisticRepo) GroupedStatisticByFilters(ctx context.Context, search GroupedStatisticSearch) (gs []GroupedStatistic, err error) {
 	b := strings.Builder{}
 	b.WriteString(`
-		SELECT t."tgUserId", t."exercise", sum(t.count) as "sumCount", count(t.count) as "sets"
+		SELECT t."tgUserId", t."exercise",
+			sum(t.count) as "sumCount",
+			count(*) as "sets",
+			(t."params"->>'weightKg')::float8 as "weightKg",
+			(t."params"->>'distanceM')::float8 as "distanceM",
+			sum((t."params"->>'durationSec')::float8) as "sumDurationSec"
 		FROM statistics t
 		WHERE true
 	`)
@@ -53,8 +61,8 @@ func (sr StatisticRepo) GroupedStatisticByFilters(ctx context.Context, search Gr
 	}
 
 	b.WriteString(`
-		GROUP BY 1, 2
-		ORDER BY 3 DESC
+		GROUP BY t."tgUserId", t."exercise", t."params"->>'weightKg', t."params"->>'distanceM'
+		ORDER BY t."exercise", "weightKg" DESC NULLS LAST, "distanceM" DESC NULLS LAST, "sumCount" DESC
 	`)
 
 	if _, err = sr.db.QueryContext(ctx, &gs, b.String()); err != nil {

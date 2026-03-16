@@ -15,16 +15,40 @@ const (
 )
 
 const (
-	pullUpEx       Exercise = "pullUp"
-	muscleUpEx     Exercise = "muscleUp"
-	pushUpEx       Exercise = "pushUp"
-	dipsEx         Exercise = "dip"
-	absEx          Exercise = "abs"
-	squatEx        Exercise = "squat"
-	lungeEx        Exercise = "lunge"
-	burpeeEx       Exercise = "burpee"
-	skippingRopeEx Exercise = "skippingRope"
-	//joggingEx      Exercise = "jogging"
+	pullUpEx         Exercise = "pullUp"
+	muscleUpEx       Exercise = "muscleUp"
+	pushUpEx         Exercise = "pushUp"
+	dipsEx           Exercise = "dip"
+	absEx            Exercise = "abs"
+	squatEx          Exercise = "squat"
+	lungeEx          Exercise = "lunge"
+	burpeeEx         Exercise = "burpee"
+	skippingRopeEx   Exercise = "skippingRope"
+	hyperextensionEx Exercise = "hyperextension"
+	legRaiseEx       Exercise = "legRaise"
+
+	joggingEx Exercise = "jogging"
+	plankEx   Exercise = "plank"
+
+	benchPressEx       Exercise = "benchPress"
+	deadliftEx         Exercise = "deadlift"
+	barbellSquatEx     Exercise = "barbellSquat"
+	latPulldownEx      Exercise = "latPulldown"
+	legPressEx         Exercise = "legPress"
+	preacherCurlEx     Exercise = "preacherCurl"
+	shoulderPressEx    Exercise = "shoulderPress"
+	bentOverRowEx      Exercise = "bentOverRow"
+	dumbbellCurlEx     Exercise = "dumbbellCurl"
+	legExtensionEx     Exercise = "legExtension"
+	legCurlEx          Exercise = "legCurl"
+	seatedRowEx        Exercise = "seatedRow"
+	chestFlyEx         Exercise = "chestFly"
+	tricepPushdownEx   Exercise = "tricepPushdown"
+	romanianDeadliftEx Exercise = "romanianDeadlift"
+	hipThrustEx        Exercise = "hipThrust"
+	lateralRaiseEx     Exercise = "lateralRaise"
+	shrugEx            Exercise = "shrug"
+
 	allEx Exercise = "all"
 )
 
@@ -285,10 +309,179 @@ var (
 			"скокалки": skippingRopeEx,
 
 			// joggingEx
-			//"бег":      joggingEx,
-			//"бегал":    joggingEx,
-			//"пробежал": joggingEx,
-			//"пробежка": joggingEx,
+			"бег":      joggingEx,
+			"бегал":    joggingEx,
+			"пробежал": joggingEx,
+			"пробежка": joggingEx,
+			"пробежку": joggingEx,
+			"бежал":    joggingEx,
+
+			// benchPressEx
+			"жим":      benchPressEx,
+			"жим лёжа": benchPressEx,
+			"жим лежа": benchPressEx,
+			"жым":      benchPressEx,
+			"жым лёжа": benchPressEx,
+			"жым лежа": benchPressEx,
+
+			// deadliftEx
+			"становая":      deadliftEx,
+			"становая тяга": deadliftEx,
+			"становую":      deadliftEx,
+			"становую тягу": deadliftEx,
+			"станавая":      deadliftEx,
+			"станавая тяга": deadliftEx,
+			"станавую":      deadliftEx,
+			"станавую тягу": deadliftEx,
+
+			// barbellSquatEx
+			"присед со штангой":  barbellSquatEx,
+			"приседы со штангой": barbellSquatEx,
+			"присед штанга":      barbellSquatEx,
+
+			// plankEx
+			"планка":  plankEx,
+			"планку":  plankEx,
+			"планки":  plankEx,
+			"планке":  plankEx,
+			"планкой": plankEx,
+
+			// hyperextensionEx
+			"гиперэкстензия": hyperextensionEx,
+			"гиперэкстензии": hyperextensionEx,
+			"гиперэкстензию": hyperextensionEx,
+			"гиперэкстензий": hyperextensionEx,
+			"гиперэкстэнзия": hyperextensionEx,
+			"гиперэкстэнзии": hyperextensionEx,
+			"гиперэкстэнзию": hyperextensionEx,
+			"гиперикстензия": hyperextensionEx,
+			"гиперикстензии": hyperextensionEx,
+			"экстензия":      hyperextensionEx,
+			"экстензии":      hyperextensionEx,
+
+			// legRaiseEx
+			"подъём ног":          legRaiseEx,
+			"подъем ног":          legRaiseEx,
+			"подъёмы ног":         legRaiseEx,
+			"подъемы ног":         legRaiseEx,
+			"подъём ног в висе":   legRaiseEx,
+			"подъем ног в висе":   legRaiseEx,
+			"подъёмы ног в висе":  legRaiseEx,
+			"подъемы ног в висе":  legRaiseEx,
+			"поднятие ног":        legRaiseEx,
+			"поднятие ног в висе": legRaiseEx,
+
+			// latPulldownEx
+			"тягу верхнего блока": latPulldownEx,
+			"тяга верхнего блока": latPulldownEx,
+			"тяга верхнева блока": latPulldownEx,
+			"тяга верхнего блоко": latPulldownEx,
+			"верхний блок":        latPulldownEx,
+			"верхняя тяга":        latPulldownEx,
+
+			// legPressEx
+			"жим ногами": legPressEx,
+			"жим нагами": legPressEx,
+			"жым ногами": legPressEx,
+			"жым нагами": legPressEx,
+
+			// preacherCurlEx
+			"скамья скотта":   preacherCurlEx,
+			"скамья скота":    preacherCurlEx,
+			"скотта":          preacherCurlEx,
+			"скота":           preacherCurlEx,
+			"скамейка скотта": preacherCurlEx,
+			"скамейка скота":  preacherCurlEx,
+
+			// shoulderPressEx
+			"жим стоя":        shoulderPressEx,
+			"жым стоя":        shoulderPressEx,
+			"армейский жим":   shoulderPressEx,
+			"армейский жым":   shoulderPressEx,
+			"армейскый жим":   shoulderPressEx,
+			"армейскый жым":   shoulderPressEx,
+			"жим над головой": shoulderPressEx,
+
+			// bentOverRowEx
+			"тяга в наклоне":        bentOverRowEx,
+			"тяга штанги в наклоне": bentOverRowEx,
+			"тяга штанги в наклони": bentOverRowEx,
+			"тяга в наклони":        bentOverRowEx,
+
+			// dumbbellCurlEx
+			"подъём гантелей":           dumbbellCurlEx,
+			"подъем гантелей":           dumbbellCurlEx,
+			"подъём гантелей на бицепс": dumbbellCurlEx,
+			"подъем гантелей на бицепс": dumbbellCurlEx,
+			"бицепс гантели":            dumbbellCurlEx,
+			"бицепс гантелями":          dumbbellCurlEx,
+			"сгибание на бицепс":        dumbbellCurlEx,
+			"сгибания на бицепс":        dumbbellCurlEx,
+
+			// legExtensionEx
+			"разгибание ног":             legExtensionEx,
+			"разгибания ног":             legExtensionEx,
+			"разгибание ног в тренажёре": legExtensionEx,
+			"разгибание ног в тренажере": legExtensionEx,
+
+			// legCurlEx
+			"сгибание ног":             legCurlEx,
+			"сгибания ног":             legCurlEx,
+			"сгибание ног в тренажёре": legCurlEx,
+			"сгибание ног в тренажере": legCurlEx,
+
+			// seatedRowEx
+			"тяга нижнего блока":  seatedRowEx,
+			"тяга нижнева блока":  seatedRowEx,
+			"нижний блок":         seatedRowEx,
+			"нижняя тяга":         seatedRowEx,
+			"горизонтальная тяга": seatedRowEx,
+
+			// chestFlyEx
+			"сведение рук":   chestFlyEx,
+			"сведения рук":   chestFlyEx,
+			"бабочка":        chestFlyEx,
+			"бабачка":        chestFlyEx,
+			"разведение рук": chestFlyEx,
+			"разведения рук": chestFlyEx,
+
+			// tricepPushdownEx
+			"разгибание на трицепс": tricepPushdownEx,
+			"разгибания на трицепс": tricepPushdownEx,
+			"трицепс на блоке":      tricepPushdownEx,
+			"трицепс блок":          tricepPushdownEx,
+
+			// romanianDeadliftEx
+			"румынская тяга": romanianDeadliftEx,
+			"румынская":      romanianDeadliftEx,
+			"румынскую тягу": romanianDeadliftEx,
+			"румынскую":      romanianDeadliftEx,
+			"румынка":        romanianDeadliftEx,
+			"румынку":        romanianDeadliftEx,
+			"мёртвая тяга":   romanianDeadliftEx,
+			"мертвая тяга":   romanianDeadliftEx,
+
+			// hipThrustEx
+			"ягодичный мост":   hipThrustEx,
+			"ягодичный мостик": hipThrustEx,
+			"ягадичный мост":   hipThrustEx,
+			"ягадичный мостик": hipThrustEx,
+
+			// lateralRaiseEx
+			"махи гантелями":            lateralRaiseEx,
+			"махи":                      lateralRaiseEx,
+			"разводка гантелей":         lateralRaiseEx,
+			"разводка":                  lateralRaiseEx,
+			"махи в стороны":            lateralRaiseEx,
+			"подъём гантелей в стороны": lateralRaiseEx,
+			"подъем гантелей в стороны": lateralRaiseEx,
+
+			// shrugEx
+			"шраги":             shrugEx,
+			"шраг":              shrugEx,
+			"шрагов":            shrugEx,
+			"шраги со штангой":  shrugEx,
+			"шраги с гантелями": shrugEx,
 
 			// all
 			"всё":            allEx,
@@ -453,13 +646,148 @@ var (
 			"skip ropes":     skippingRopeEx,
 
 			// joggingEx
-			//"jogging": joggingEx,
-			//"joging":  joggingEx,
-			//"joggin":  joggingEx,
-			//"run":     joggingEx,
-			//"running": joggingEx,
-			//"trot":    joggingEx,
-			//"sprint":  joggingEx,
+			"jogging": joggingEx,
+			"joging":  joggingEx,
+			"joggin":  joggingEx,
+			"run":     joggingEx,
+			"running": joggingEx,
+			"trot":    joggingEx,
+			"sprint":  joggingEx,
+
+			// benchPressEx
+			"bench":       benchPressEx,
+			"bench press": benchPressEx,
+			"benchpress":  benchPressEx,
+
+			// deadliftEx
+			"deadlift":  deadliftEx,
+			"deadlifts": deadliftEx,
+			"dead lift": deadliftEx,
+
+			// barbellSquatEx
+			"barbell squat":  barbellSquatEx,
+			"barbell squats": barbellSquatEx,
+			"barbellsquat":   barbellSquatEx,
+
+			// plankEx
+			"plank":  plankEx,
+			"planks": plankEx,
+
+			// hyperextensionEx
+			"hyperextension":  hyperextensionEx,
+			"hyperextensions": hyperextensionEx,
+			"hyper extension": hyperextensionEx,
+			"hyper":           hyperextensionEx,
+			"back extension":  hyperextensionEx,
+			"back extensions": hyperextensionEx,
+
+			// legRaiseEx
+			"leg raise":          legRaiseEx,
+			"leg raises":         legRaiseEx,
+			"legraise":           legRaiseEx,
+			"legraises":          legRaiseEx,
+			"hanging leg raise":  legRaiseEx,
+			"hanging leg raises": legRaiseEx,
+
+			// latPulldownEx
+			"lat pulldown":  latPulldownEx,
+			"lat pulldowns": latPulldownEx,
+			"latpulldown":   latPulldownEx,
+			"pulldown":      latPulldownEx,
+			"pulldowns":     latPulldownEx,
+			"pull down":     latPulldownEx,
+			"pull downs":    latPulldownEx,
+
+			// legPressEx
+			"leg press": legPressEx,
+			"legpress":  legPressEx,
+
+			// preacherCurlEx
+			"preacher curl":  preacherCurlEx,
+			"preacher curls": preacherCurlEx,
+			"preachercurl":   preacherCurlEx,
+			"scott bench":    preacherCurlEx,
+			"scott curl":     preacherCurlEx,
+			"scott curls":    preacherCurlEx,
+
+			// shoulderPressEx
+			"shoulder press": shoulderPressEx,
+			"shoulderpress":  shoulderPressEx,
+			"overhead press": shoulderPressEx,
+			"overheadpress":  shoulderPressEx,
+			"ohp":            shoulderPressEx,
+			"military press": shoulderPressEx,
+
+			// bentOverRowEx
+			"bent over row":  bentOverRowEx,
+			"bent over rows": bentOverRowEx,
+			"bentoverrow":    bentOverRowEx,
+			"barbell row":    bentOverRowEx,
+			"barbell rows":   bentOverRowEx,
+
+			// dumbbellCurlEx
+			"dumbbell curl":  dumbbellCurlEx,
+			"dumbbell curls": dumbbellCurlEx,
+			"dumbbellcurl":   dumbbellCurlEx,
+			"bicep curl":     dumbbellCurlEx,
+			"bicep curls":    dumbbellCurlEx,
+			"biceps curl":    dumbbellCurlEx,
+			"biceps curls":   dumbbellCurlEx,
+
+			// legExtensionEx
+			"leg extension":  legExtensionEx,
+			"leg extensions": legExtensionEx,
+			"legextension":   legExtensionEx,
+
+			// legCurlEx
+			"leg curl":  legCurlEx,
+			"leg curls": legCurlEx,
+			"legcurl":   legCurlEx,
+
+			// seatedRowEx
+			"seated row":  seatedRowEx,
+			"seated rows": seatedRowEx,
+			"seatedrow":   seatedRowEx,
+			"cable row":   seatedRowEx,
+			"cable rows":  seatedRowEx,
+
+			// chestFlyEx
+			"chest fly":   chestFlyEx,
+			"chest flys":  chestFlyEx,
+			"chest flies": chestFlyEx,
+			"pec deck":    chestFlyEx,
+			"pec fly":     chestFlyEx,
+			"pec flys":    chestFlyEx,
+
+			// tricepPushdownEx
+			"tricep pushdown":   tricepPushdownEx,
+			"tricep pushdowns":  tricepPushdownEx,
+			"triceppushdown":    tricepPushdownEx,
+			"tricep extension":  tricepPushdownEx,
+			"tricep extensions": tricepPushdownEx,
+
+			// romanianDeadliftEx
+			"romanian deadlift":  romanianDeadliftEx,
+			"romanian deadlifts": romanianDeadliftEx,
+			"rdl":                romanianDeadliftEx,
+			"stiff leg deadlift": romanianDeadliftEx,
+
+			// hipThrustEx
+			"hip thrust":   hipThrustEx,
+			"hip thrusts":  hipThrustEx,
+			"hipthrust":    hipThrustEx,
+			"glute bridge": hipThrustEx,
+
+			// lateralRaiseEx
+			"lateral raise":  lateralRaiseEx,
+			"lateral raises": lateralRaiseEx,
+			"lateralraise":   lateralRaiseEx,
+			"side raise":     lateralRaiseEx,
+			"side raises":    lateralRaiseEx,
+
+			// shrugEx
+			"shrug":  shrugEx,
+			"shrugs": shrugEx,
 
 			// all
 			"all":        allEx,
@@ -616,28 +944,70 @@ var (
 
 	exTextByLang = map[language]map[Exercise]string{
 		langRU: {
-			pullUpEx:       "подтягивания",
-			muscleUpEx:     "выход силы",
-			pushUpEx:       "отжимания",
-			dipsEx:         "брусья",
-			absEx:          "пресс",
-			squatEx:        "приседания",
-			lungeEx:        "выпады",
-			burpeeEx:       "бёрпи",
-			skippingRopeEx: "скакалка",
-			//joggingEx:      "бег",
+			pullUpEx:           "подтягивания",
+			muscleUpEx:         "выход силы",
+			pushUpEx:           "отжимания",
+			dipsEx:             "брусья",
+			absEx:              "пресс",
+			squatEx:            "приседания",
+			lungeEx:            "выпады",
+			burpeeEx:           "бёрпи",
+			skippingRopeEx:     "скакалка",
+			hyperextensionEx:   "гиперэкстензия",
+			legRaiseEx:         "подъём ног",
+			joggingEx:          "бег",
+			plankEx:            "планка",
+			benchPressEx:       "жим лёжа",
+			deadliftEx:         "становая тяга",
+			barbellSquatEx:     "присед со штангой",
+			latPulldownEx:      "тяга верхнего блока",
+			legPressEx:         "жим ногами",
+			preacherCurlEx:     "скамья Скотта",
+			shoulderPressEx:    "жим стоя",
+			bentOverRowEx:      "тяга в наклоне",
+			dumbbellCurlEx:     "подъём на бицепс",
+			legExtensionEx:     "разгибание ног",
+			legCurlEx:          "сгибание ног",
+			seatedRowEx:        "тяга нижнего блока",
+			chestFlyEx:         "сведение рук",
+			tricepPushdownEx:   "разгибание на трицепс",
+			romanianDeadliftEx: "румынская тяга",
+			hipThrustEx:        "ягодичный мост",
+			lateralRaiseEx:     "махи гантелями",
+			shrugEx:            "шраги",
 		},
 		langEN: {
-			pullUpEx:       "pull-ups",
-			muscleUpEx:     "muscle-ups",
-			pushUpEx:       "push-ups",
-			dipsEx:         "dips",
-			absEx:          "abs",
-			squatEx:        "squats",
-			lungeEx:        "lunges",
-			burpeeEx:       "burpee",
-			skippingRopeEx: "skipping rope",
-			//joggingEx:      "jogging",
+			pullUpEx:           "pull-ups",
+			muscleUpEx:         "muscle-ups",
+			pushUpEx:           "push-ups",
+			dipsEx:             "dips",
+			absEx:              "abs",
+			squatEx:            "squats",
+			lungeEx:            "lunges",
+			burpeeEx:           "burpee",
+			skippingRopeEx:     "skipping rope",
+			hyperextensionEx:   "hyperextension",
+			legRaiseEx:         "leg raise",
+			joggingEx:          "jogging",
+			plankEx:            "plank",
+			benchPressEx:       "bench press",
+			deadliftEx:         "deadlift",
+			barbellSquatEx:     "barbell squat",
+			latPulldownEx:      "lat pulldown",
+			legPressEx:         "leg press",
+			preacherCurlEx:     "preacher curl",
+			shoulderPressEx:    "shoulder press",
+			bentOverRowEx:      "bent-over row",
+			dumbbellCurlEx:     "dumbbell curl",
+			legExtensionEx:     "leg extension",
+			legCurlEx:          "leg curl",
+			seatedRowEx:        "seated row",
+			chestFlyEx:         "chest fly",
+			tricepPushdownEx:   "tricep pushdown",
+			romanianDeadliftEx: "romanian deadlift",
+			hipThrustEx:        "hip thrust",
+			lateralRaiseEx:     "lateral raise",
+			shrugEx:            "shrugs",
 		},
 	}
 	periodTextByLang = map[language]map[textPeriod]string{
@@ -680,6 +1050,13 @@ const (
 	tableExCol
 	tableCntCol
 	tableSetCol
+	tableWeightCol
+	tableDistCol
+	tableTimeCol
+	weightRequired
+	durationRequired
+	distanceRequired
+	paramInvalid
 	commonHelpMsg
 	addHelpMsg
 	showHelpMsg
@@ -707,32 +1084,46 @@ var (
 			tableExCol:       "упражнение",
 			tableCntCol:      "кол-во",
 			tableSetCol:      "подходы",
+			tableWeightCol:   "вес",
+			tableDistCol:     "дистанция",
+			tableTimeCol:     "время",
+			weightRequired:   "Для этого упражнения нужно указать вес. Пример: жим 80кг 10",
+			durationRequired: "Для этого упражнения нужно указать время. Пример: планка 90сек",
+			distanceRequired: "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
+			paramInvalid:     "Не удалось распознать параметр: %s",
 			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
-				"Ты же ведь занимаешься спортом, верно?🤔\n" +
-				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n" +
+				"Ты же ведь занимаешься спортом, верно?🤔\n\n" +
+				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n\n" +
 				"Список поддерживаемых команд:\n" +
-				"На добавление: `Сделал` или `Добавь`\n" +
-				"На показ статистики: `Покажи`\n" +
-				"Чтобы посмотреть помощь по каждой комманде, отправь: `помощь` *название команды*\n" +
+				"• Добавить результат: `Сделал` или `Добавь`\n" +
+				"• Показать статистику: `Покажи`\n" +
+				"• Справка: `Помощь`\n\n" +
+				"Чтобы посмотреть помощь по конкретной команде, отправь: `помощь` *название команды*\n" +
 				"Например: `Помощь Добавь`",
-			addHelpMsg: "Чтобы записать результаты, напиши ключевое слово (команду) на добавление упражнения `сделал`. Затем, через " +
-				"пробел укажи выполненное упражнение. Далее укажи сделанное количество.\n" +
-				"Например, ты подтянулся 10 раз. Чтобы я всё корректно записал, напиши мне:\n" +
-				"`@%s сделал подтягивание 10`",
-			showHelpMsg: "Чтобы показать статистику, напиши ключевое слово (команду) `Покажи`. Затем укажи упражнение.\n" +
-				"*Можно ввести несколько, через запятую*, например, `подтягивание, отжимание`.\n" +
-				"Далее укажи период, за который ты хочешь посмотреть статистику. Периодов можно указывать " +
-				"несколько через используя пробелы.\n" +
-				"Например, нужно вывести статистику по подтягиваниям за сегодня, за 15.10.2022, " +
-				"за период с 01.10.2022 по 10.10.2022. Чтобы периоды обработались корректно, введи периоды" +
-				"следующим образом:\n" +
-				"`за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n" +
-				"Некорректные периоды будут проигнорированы и выведены. Если при " +
-				"вводе интервала дата *от* окажется больше даты *до*, они поменяются местами и результат за этот " +
-				"период будет найден корректно.\n" +
-				"В итоге полная корректная команда будет выглядеть следующим образом: \n" +
-				"`@%s покажи подтягивание, отжимание за сегодня, за 15.10.2022, за 01.10.2022-10.10.2022`\n",
-			helpHelpMsg: "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь команде помощи🤔",
+			addHelpMsg: "Чтобы записать результаты, напиши команду `сделал`, затем упражнение и параметры.\n\n" +
+				"*Обычные упражнения* — укажи количество повторений:\n" +
+				"`@%[1]s сделал подтягивания 10`\n" +
+				"`@%[1]s сделал отжимания 20`\n\n" +
+				"*Упражнения с весом* — укажи вес с суффиксом (кг, г) и количество:\n" +
+				"`@%[1]s сделал жим 80кг 10`\n" +
+				"`@%[1]s сделал становую тягу 100кг 5`\n" +
+				"`@%[1]s сделал тягу верхнего блока 60кг 12`\n\n" +
+				"*Бег* — укажи дистанцию (км, м) и время (ч, мин, сек):\n" +
+				"`@%[1]s сделал бег 5км 25мин`\n\n" +
+				"*Планка* — укажи время:\n" +
+				"`@%[1]s сделал планку 1мин 30сек`\n",
+			showHelpMsg: "Чтобы показать статистику, напиши команду `Покажи`, затем упражнение и период.\n\n" +
+				"*Можно указать несколько упражнений через пробел:*\n" +
+				"`@%[1]s покажи подтягивания отжимания за неделю`\n\n" +
+				"*Или всё сразу:*\n" +
+				"`@%[1]s покажи всё за сегодня`\n\n" +
+				"*Поддерживаемые периоды:* сегодня, вчера, позавчера, неделя, месяц, год, всё время.\n" +
+				"Также можно указать точную дату или интервал:\n" +
+				"`за 15.10.2025`\n" +
+				"`за 01.10.2025-10.10.2025`\n\n" +
+				"Полный пример:\n" +
+				"`@%[1]s покажи подтягивания отжимания за сегодня за 01.10.2025-10.10.2025`\n",
+			helpHelpMsg: "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь к команде помощи🤔",
 			errMsg:      "❌ Произошла ошибка. Попробуйте позже",
 		},
 		langEN: {
@@ -753,30 +1144,46 @@ var (
 			tableExCol:       "exercise",
 			tableCntCol:      "reps",
 			tableSetCol:      "sets",
-			commonHelpMsg: "Hi there! I can keep your training statistic.\n" +
-				"You do sports, right?🤔\n" +
-				"Write me direct messages. Mention me in groups like this: `@%s`\n" +
-				"List supported commands: \n" +
-				"To add: `Add` or `Store` \n" +
-				"To show statistic: `Show` \n" +
-				"To get help for each command send: `help` *cmd name*\n" +
-				"For instance: `Help add`",
-			addHelpMsg: "To write statistic, write a message with key word (command) `add`. Then using spaces" +
-				"write an exercise you done. Then write done reps. \n" +
-				"For instance, you did 10 pull-ups. To store it correctly, write me\n" +
-				"`@%s add push-ups 10`",
-			showHelpMsg: "Write `Show` to show statistic, then write an exercise.\n" +
-				"*you can write some exercises using spaces*, e.g. `pull-ups, push-ups`.\n" +
-				"Then write a period you want to show a statistic. You can write some periods using spaces.\n " +
-				"For instance, you want to watch a statistic of pull-ups for today, for 15.10.2022 and " +
-				"from 01.10.2022 to 10.10.2022. I can handle it correctly if you write them like this:\n" +
-				"`for today, for 15.10.2022, 01.10.2022-10.10.2022`\n" +
-				"A wrong period will be ignored and printed." +
-				"If you write an interval where *from* date later than *to* date, they will swap places and the result" +
-				"will be found correctly." +
-				"The full correct example is below:\n" +
-				"`@%s show push-ups, pull-ups for today, for 15.10.2022, 01.10.2022-10.10.2022`\n",
-			helpHelpMsg: "Help for the help command is not provided. How did you guess to ask help to help command?🤔",
+			tableWeightCol:   "weight",
+			tableDistCol:     "distance",
+			tableTimeCol:     "time",
+			weightRequired:   "Weight is required for this exercise. Example: bench 80kg 10",
+			durationRequired: "Duration is required for this exercise. Example: plank 90sec",
+			distanceRequired: "Distance is required for this exercise. Example: run 5km 25min",
+			paramInvalid:     "Can't recognize parameter: %s",
+			commonHelpMsg: "Hi there! I can keep your training statistics.\n" +
+				"You do sports, right?🤔\n\n" +
+				"Write me direct messages. In groups, mention me like this: `@%s`\n\n" +
+				"Supported commands:\n" +
+				"• Add a result: `Add` or `Done`\n" +
+				"• Show statistics: `Show`\n" +
+				"• Help: `Help`\n\n" +
+				"To get help for a specific command, send: `help` *command name*\n" +
+				"For example: `Help add`",
+			addHelpMsg: "To record a result, write the command `add`, then the exercise and its parameters.\n\n" +
+				"*Basic exercises* — specify the number of reps:\n" +
+				"`@%[1]s add pull-ups 10`\n" +
+				"`@%[1]s add push-ups 20`\n\n" +
+				"*Weighted exercises* — specify weight with a suffix (kg, lbs) and reps:\n" +
+				"`@%[1]s add bench press 80kg 10`\n" +
+				"`@%[1]s add deadlift 100kg 5`\n" +
+				"`@%[1]s add lat pulldown 60kg 12`\n\n" +
+				"*Running* — specify distance (km, m) and time (h, min, sec):\n" +
+				"`@%[1]s add jogging 5km 25min`\n\n" +
+				"*Plank* — specify duration:\n" +
+				"`@%[1]s add plank 1min 30sec`\n",
+			showHelpMsg: "To show statistics, write the command `Show`, then an exercise and a period.\n\n" +
+				"*You can specify multiple exercises separated by spaces:*\n" +
+				"`@%[1]s show pull-ups push-ups for week`\n\n" +
+				"*Or everything at once:*\n" +
+				"`@%[1]s show all for today`\n\n" +
+				"*Supported periods:* today, yesterday, week, month, year, all.\n" +
+				"You can also specify an exact date or a range:\n" +
+				"`for 15.10.2025`\n" +
+				"`for 01.10.2025-10.10.2025`\n\n" +
+				"Full example:\n" +
+				"`@%[1]s show pull-ups push-ups for today for 01.10.2025-10.10.2025`\n",
+			helpHelpMsg: "Help for the help command is not provided. How did you even think to ask for help on the help command?🤔",
 			errMsg:      "❌ An error occurred. Try again later",
 		},
 	}
@@ -847,25 +1254,62 @@ func allPeriodsByLang(lang language) string {
 	return b.String()
 }
 
-var (
-	// TODO: implement later
-	//hasDistance = map[Exercise]struct{}{
-	//	joggingEx: {},
-	//}
-	//hasWeight = map[Exercise]struct{}{
-	//	pullUpEx:   {},
-	//	muscleUpEx: {},
-	//	dipsEx:     {},
-	//}
-	exHasCnt = map[Exercise]struct{}{
-		pullUpEx:       {},
-		muscleUpEx:     {},
-		pushUpEx:       {},
-		dipsEx:         {},
-		absEx:          {},
-		squatEx:        {},
-		lungeEx:        {},
-		burpeeEx:       {},
-		skippingRopeEx: {},
-	}
-)
+var exerciseCategoryMap = map[Exercise]ExerciseCategory{
+	// CategoryRepsWeight
+	benchPressEx:       CategoryRepsWeight,
+	deadliftEx:         CategoryRepsWeight,
+	barbellSquatEx:     CategoryRepsWeight,
+	latPulldownEx:      CategoryRepsWeight,
+	legPressEx:         CategoryRepsWeight,
+	preacherCurlEx:     CategoryRepsWeight,
+	shoulderPressEx:    CategoryRepsWeight,
+	bentOverRowEx:      CategoryRepsWeight,
+	dumbbellCurlEx:     CategoryRepsWeight,
+	legExtensionEx:     CategoryRepsWeight,
+	legCurlEx:          CategoryRepsWeight,
+	seatedRowEx:        CategoryRepsWeight,
+	chestFlyEx:         CategoryRepsWeight,
+	tricepPushdownEx:   CategoryRepsWeight,
+	romanianDeadliftEx: CategoryRepsWeight,
+	hipThrustEx:        CategoryRepsWeight,
+	lateralRaiseEx:     CategoryRepsWeight,
+	shrugEx:            CategoryRepsWeight,
+
+	// CategoryDistTime
+	joggingEx: CategoryDistTime,
+
+	// CategoryDuration
+	plankEx: CategoryDuration,
+}
+
+var unitSuffixByLang = map[language]map[string]UnitDef{
+	langRU: {
+		"кг":  {ParamType: ParamWeight, Multiplier: 1},
+		"г":   {ParamType: ParamWeight, Multiplier: 0.001},
+		"км":  {ParamType: ParamDistance, Multiplier: 1000},
+		"м":   {ParamType: ParamDistance, Multiplier: 1},
+		"ч":   {ParamType: ParamDuration, Multiplier: 3600},
+		"мин": {ParamType: ParamDuration, Multiplier: 60},
+		"сек": {ParamType: ParamDuration, Multiplier: 1},
+		"с":   {ParamType: ParamDuration, Multiplier: 1},
+		"раз": {ParamType: ParamCount, Multiplier: 1},
+		"р":   {ParamType: ParamCount, Multiplier: 1},
+	},
+	langEN: {
+		"kg":   {ParamType: ParamWeight, Multiplier: 1},
+		"lbs":  {ParamType: ParamWeight, Multiplier: 0.453592},
+		"lb":   {ParamType: ParamWeight, Multiplier: 0.453592},
+		"g":    {ParamType: ParamWeight, Multiplier: 0.001},
+		"km":   {ParamType: ParamDistance, Multiplier: 1000},
+		"m":    {ParamType: ParamDistance, Multiplier: 1},
+		"mi":   {ParamType: ParamDistance, Multiplier: 1609.34},
+		"h":    {ParamType: ParamDuration, Multiplier: 3600},
+		"hr":   {ParamType: ParamDuration, Multiplier: 3600},
+		"min":  {ParamType: ParamDuration, Multiplier: 60},
+		"sec":  {ParamType: ParamDuration, Multiplier: 1},
+		"s":    {ParamType: ParamDuration, Multiplier: 1},
+		"reps": {ParamType: ParamCount, Multiplier: 1},
+		"rep":  {ParamType: ParamCount, Multiplier: 1},
+		"x":    {ParamType: ParamCount, Multiplier: 1},
+	},
+}

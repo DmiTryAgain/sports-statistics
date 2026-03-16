@@ -1,11 +1,85 @@
 package tg
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 )
+
+// ExerciseCategory определяет, какие параметры ожидаются у упражнения
+type ExerciseCategory int
+
+const (
+	CategoryReps       ExerciseCategory = iota // только повторения (текущие упражнения)
+	CategoryRepsWeight                         // повторения + вес
+	CategoryDistTime                           // дистанция + время
+	CategoryDuration                           // только время (длительность)
+)
+
+// RequiredParams возвращает список обязательных типов параметров для категории
+func (c ExerciseCategory) RequiredParams() []ParamType {
+	switch c {
+	case CategoryReps:
+		return []ParamType{ParamCount}
+	case CategoryRepsWeight:
+		return []ParamType{ParamWeight, ParamCount}
+	case CategoryDistTime:
+		return []ParamType{ParamDistance, ParamDuration}
+	case CategoryDuration:
+		return []ParamType{ParamDuration}
+	default:
+		return nil
+	}
+}
+
+// ParamType — тип параметра упражнения
+type ParamType int
+
+const (
+	ParamCount    ParamType = iota // количество повторений (голое число без суффикса)
+	ParamWeight                    // вес: кг, г
+	ParamDistance                  // дистанция: км, м
+	ParamDuration                  // длительность: ч, мин, сек
+)
+
+// UnitDef описывает единицу измерения и коэффициент нормализации к базовой единице
+type UnitDef struct {
+	ParamType  ParamType
+	Multiplier float64
+}
+
+// ParsedParams — результат парсинга текстовых параметров упражнения
+type ParsedParams struct {
+	Count       *float64 // повторения
+	WeightKg    *float64 // вес в кг (нормализован)
+	DistanceM   *float64 // дистанция в метрах (нормализована)
+	DurationSec *float64 // длительность в секундах (нормализована)
+}
+
+// ToDBParams конвертирует в структуру для БД
+func (pp *ParsedParams) ToDBParams() *db.StatisticParams {
+	p := &db.StatisticParams{
+		WeightKg:    pp.WeightKg,
+		DistanceM:   pp.DistanceM,
+		DurationSec: pp.DurationSec,
+	}
+	if p.IsEmpty() {
+		return nil
+	}
+	return p
+}
+
+// CountOrDefault возвращает count или 1, если не задан
+func (pp *ParsedParams) CountOrDefault() float64 {
+	if pp.Count != nil {
+		return *pp.Count
+	}
+	return 1
+}
+
+func ptrFloat64(v float64) *float64 { return &v }
 
 type allChecker interface {
 	isAll() bool
@@ -28,21 +102,12 @@ func (e Exercise) isZero() bool {
 	return e == def
 }
 
-// TODO: implement later
-//func (e Exercise) hasDistance() bool {
-//	_, ok := hasDistance[e]
-//	return ok
-//}
-
-// TODO: implement weight exercises
-//func (e Exercise) hasWeight() bool {
-//	_, ok := hasWeight[e]
-//	return ok
-//}
-
-func (e Exercise) mustHaveCnt() bool {
-	_, ok := exHasCnt[e]
-	return ok
+func (e Exercise) Category() ExerciseCategory {
+	cat, ok := exerciseCategoryMap[e]
+	if !ok {
+		return CategoryReps
+	}
+	return cat
 }
 
 type Exercises []Exercise
@@ -109,12 +174,15 @@ func (ps periods) ToDB() []db.Period {
 type GroupedStatistic struct {
 	db.GroupedStatistic
 	TranslatedExercise string
+	Category           ExerciseCategory
 }
 
 func NewGroupedStatistic(in db.GroupedStatistic, lang language) GroupedStatistic {
+	ex := Exercise(in.Exercise)
 	return GroupedStatistic{
 		GroupedStatistic:   in,
-		TranslatedExercise: exTextByLang[lang][Exercise(in.Exercise)],
+		TranslatedExercise: exTextByLang[lang][ex],
+		Category:           ex.Category(),
 	}
 }
 
@@ -125,4 +193,85 @@ func NewGroupedStatisticList(in []db.GroupedStatistic, lang language) []GroupedS
 	}
 
 	return res
+}
+
+func anyHasWeight(stats []GroupedStatistic) bool {
+	for _, s := range stats {
+		if s.WeightKg != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func anyHasDistance(stats []GroupedStatistic) bool {
+	for _, s := range stats {
+		if s.DistanceM != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func anyHasDuration(stats []GroupedStatistic) bool {
+	for _, s := range stats {
+		if s.SumDurationSec != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func formatWeight(kg float64, lang language) string {
+	suffixKg, suffixG := "кг", "г"
+	if lang == langEN {
+		suffixKg, suffixG = "kg", "g"
+	}
+	if kg < 1 {
+		return fmt.Sprintf("%.0f%s", kg*1000, suffixG)
+	}
+	if kg == float64(int(kg)) {
+		return fmt.Sprintf("%.0f%s", kg, suffixKg)
+	}
+	return fmt.Sprintf("%.1f%s", kg, suffixKg)
+}
+
+func formatDistance(meters float64, lang language) string {
+	suffixKm, suffixM := "км", "м"
+	if lang == langEN {
+		suffixKm, suffixM = "km", "m"
+	}
+	if meters >= 1000 {
+		km := meters / 1000
+		if km == float64(int(km)) {
+			return fmt.Sprintf("%.0f%s", km, suffixKm)
+		}
+		return fmt.Sprintf("%.1f%s", km, suffixKm)
+	}
+	return fmt.Sprintf("%.0f%s", meters, suffixM)
+}
+
+func formatDuration(sec float64, lang language) string {
+	suffixH, suffixMin, suffixSec := "ч", "мин", "сек"
+	if lang == langEN {
+		suffixH, suffixMin, suffixSec = "h", "min", "sec"
+	}
+	totalSec := int(sec)
+	if totalSec < 60 {
+		return fmt.Sprintf("%d%s", totalSec, suffixSec)
+	}
+	if totalSec < 3600 {
+		mins := totalSec / 60
+		remSec := totalSec % 60
+		if remSec == 0 {
+			return fmt.Sprintf("%d%s", mins, suffixMin)
+		}
+		return fmt.Sprintf("%d%s %d%s", mins, suffixMin, remSec, suffixSec)
+	}
+	hours := totalSec / 3600
+	remMin := (totalSec % 3600) / 60
+	if remMin == 0 {
+		return fmt.Sprintf("%d%s", hours, suffixH)
+	}
+	return fmt.Sprintf("%d%s %d%s", hours, suffixH, remMin, suffixMin)
 }
