@@ -1404,8 +1404,9 @@ func (m *MessageHandler) handleCustomValueInput(ctx context.Context, upd tgbotap
 
 	m.sessions.Set(userID, session)
 
-	// Показываем следующий шаг или сохраняем, если все параметры заполнены
-	if !m.showNextParamAsNewMessage(ctx, upd, session, userID) {
+	// Показываем следующий шаг или сохраняем, если все параметры заполнены.
+	// editMsgID=0: клавиатура уже убрана кнопкой «Другой», отправляем новое сообщение.
+	if !m.showNextParamAsNewMessage(ctx, upd, session, userID, 0, 0) {
 		m.saveFromSessionText(ctx, upd, session, userID)
 	}
 }
@@ -1440,8 +1441,16 @@ func (m *MessageHandler) handleRemainingParamsText(ctx context.Context, upd tgbo
 
 	m.sessions.Set(userID, session)
 
-	// Показываем следующий шаг или сохраняем, если все параметры заполнены
-	if !m.showNextParamAsNewMessage(ctx, upd, session, userID) {
+	// Редактируем старое сообщение с клавиатурой (если есть) вместо отправки нового
+	chatID := upd.Message.Chat.ID
+	editMsgID := session.LastBotMessageID
+
+	if !m.showNextParamAsNewMessage(ctx, upd, session, userID, chatID, editMsgID) {
+		// Все параметры заполнены — убираем старую клавиатуру и сохраняем
+		if editMsgID > 0 {
+			confirmText := formatAddConfirmation(session.Exercise, session.Params.CountOrDefault(), session.Params.ToDBParams(), session.Lang)
+			m.editMessageRemoveKeyboard(chatID, editMsgID, confirmText)
+		}
 		m.saveFromSessionText(ctx, upd, session, userID)
 	}
 
@@ -1472,21 +1481,22 @@ func (m *MessageHandler) saveFromSessionText(ctx context.Context, upd tgbotapi.U
 
 // showNextParamAsNewMessage показывает следующий необходимый параметр (required, soft-required, optional)
 // в виде нового сообщения с кнопками. Возвращает true, если показал шаг; false — если все параметры заполнены.
-func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) bool {
-	if m.showNextRequiredParamMsg(ctx, upd, session, userID) {
+// Если editMsgID > 0 — редактирует существующее сообщение вместо отправки нового.
+func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
+	if m.showNextRequiredParamMsg(ctx, upd, session, userID, chatID, editMsgID) {
 		return true
 	}
-	if m.showNextSoftRequiredParamMsg(upd, session, userID) {
+	if m.showNextSoftRequiredParamMsg(upd, session, userID, chatID, editMsgID) {
 		return true
 	}
-	if m.showNextOptionalParamMsg(ctx, upd, session, userID) {
+	if m.showNextOptionalParamMsg(ctx, upd, session, userID, chatID, editMsgID) {
 		return true
 	}
 	return false
 }
 
 // showNextRequiredParamMsg показывает следующий незаполненный обязательный параметр. Возвращает true, если показал.
-func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) bool {
+func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
 	for _, rp := range session.Exercise.Category().RequiredParams() {
 		switch rp {
 		case ParamWeight:
@@ -1497,8 +1507,7 @@ func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbot
 				exName := exTextByLang[session.Lang][session.Exercise]
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseWeight], exName)
 				kb := weightInlineKeyboard(weights, session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1509,8 +1518,7 @@ func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbot
 				exName := exTextByLang[session.Lang][session.Exercise]
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseCount], exName)
 				kb := countInlineKeyboard(session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1521,8 +1529,7 @@ func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbot
 				exName := exTextByLang[session.Lang][session.Exercise]
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseDistance], exName)
 				kb := distanceInlineKeyboard(session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1534,8 +1541,7 @@ func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbot
 				cat := session.Exercise.Category()
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName)
 				kb := durationInlineKeyboard(cat, session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1546,7 +1552,7 @@ func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbot
 
 // showNextSoftRequiredParamMsg показывает следующий незаполненный soft-required параметр с кнопкой «Пропустить».
 // Возвращает true, если показал.
-func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, session *UserSession, userID string) bool {
+func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
 	for _, sp := range session.Exercise.Category().SoftRequiredParams() {
 		if session.isParamSkipped(sp) {
 			continue
@@ -1559,8 +1565,7 @@ func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, sessi
 				exName := exTextByLang[session.Lang][session.Exercise]
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
 				kb := optionalDistanceInlineKeyboard(session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1579,8 +1584,7 @@ func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, sessi
 					text = fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName)
 					kb = durationInlineKeyboard(cat, session.Lang)
 				}
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1591,7 +1595,7 @@ func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, sessi
 
 // showNextOptionalParamMsg показывает следующий незаполненный optional параметр с кнопкой «Пропустить».
 // Возвращает true, если показал.
-func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) bool {
+func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
 	for _, op := range session.Exercise.OptionalParams() {
 		if session.isParamSkipped(op) {
 			continue
@@ -1605,8 +1609,7 @@ func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbot
 				exName := exTextByLang[session.Lang][session.Exercise]
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
 				kb := optionalWeightInlineKeyboard(weights, session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1617,8 +1620,7 @@ func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbot
 				exName := exTextByLang[session.Lang][session.Exercise]
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
 				kb := optionalDistanceInlineKeyboard(session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
@@ -1630,14 +1632,23 @@ func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbot
 				cat := session.Exercise.Category()
 				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
 				kb := optionalDurationInlineKeyboard(cat, session.Lang)
-				msgID := m.sendMsgWithKeyboard(upd, text, kb)
-				session.LastBotMessageID = msgID
+				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
 				m.sessions.Set(userID, session)
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// sendOrEditKeyboard редактирует существующее сообщение (если editMsgID > 0) или отправляет новое.
+// Возвращает ID сообщения с клавиатурой.
+func (m *MessageHandler) sendOrEditKeyboard(upd tgbotapi.Update, chatID int64, editMsgID int, text string, kb tgbotapi.InlineKeyboardMarkup) int {
+	if editMsgID > 0 {
+		m.editMessageWithKeyboard(chatID, editMsgID, text, kb)
+		return editMsgID
+	}
+	return m.sendMsgWithKeyboard(upd, text, kb)
 }
 
 // sendMsgWithKeyboard отправляет сообщение с inline-кнопками и возвращает ID отправленного сообщения
