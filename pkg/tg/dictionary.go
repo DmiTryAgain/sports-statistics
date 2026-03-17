@@ -1467,21 +1467,21 @@ var replyButtonCmd = map[language]map[string]cmd{
 }
 
 var exerciseOrder = []Exercise{
-	// Reps — уличные / базовые
-	pullUpEx, pushUpEx, dipsEx, absEx, squatEx, lungeEx,
-	burpeeEx, skippingRopeEx, muscleUpEx, hyperextensionEx, legRaiseEx,
-	// Reps+Weight — зал
-	benchPressEx, deadliftEx, shoulderPressEx,
-	bentOverRowEx, latPulldownEx, seatedRowEx, legPressEx,
-	dumbbellCurlEx, preacherCurlEx, tricepPushdownEx,
-	legExtensionEx, legCurlEx, chestFlyEx,
-	romanianDeadliftEx, hipThrustEx, lateralRaiseEx, shrugEx,
-	// Duration
-	plankEx, wallSitEx, hangEx, hollowHoldEx, supermanEx, sidePlankEx,
-	// DurationWeight
-	weightHoldEx,
-	// DistTime
 	joggingEx, walkingEx,
+	pullUpEx, pushUpEx, dipsEx, absEx, squatEx,
+	benchPressEx, deadliftEx, legPressEx,
+
+	plankEx, lungeEx, muscleUpEx, burpeeEx,
+	skippingRopeEx, hyperextensionEx, legRaiseEx,
+	chestFlyEx, hangEx, shoulderPressEx,
+
+	bentOverRowEx, latPulldownEx, seatedRowEx,
+	dumbbellCurlEx, preacherCurlEx, tricepPushdownEx,
+	legExtensionEx, legCurlEx,
+	romanianDeadliftEx, hipThrustEx,
+
+	lateralRaiseEx, shrugEx, wallSitEx,
+	hollowHoldEx, supermanEx, sidePlankEx, weightHoldEx,
 }
 
 const exercisesPerPage = 9
