@@ -28,11 +28,19 @@ const (
 	legRaiseEx       Exercise = "legRaise"
 
 	joggingEx Exercise = "jogging"
-	plankEx   Exercise = "plank"
+	walkingEx Exercise = "walking"
+
+	plankEx      Exercise = "plank"
+	wallSitEx    Exercise = "wallSit"
+	hangEx       Exercise = "hang"
+	hollowHoldEx Exercise = "hollowHold"
+	supermanEx   Exercise = "superman"
+	sidePlankEx  Exercise = "sidePlank"
+
+	weightHoldEx Exercise = "weightHold"
 
 	benchPressEx       Exercise = "benchPress"
 	deadliftEx         Exercise = "deadlift"
-	barbellSquatEx     Exercise = "barbellSquat"
 	latPulldownEx      Exercise = "latPulldown"
 	legPressEx         Exercise = "legPress"
 	preacherCurlEx     Exercise = "preacherCurl"
@@ -289,6 +297,10 @@ var (
 			"присиданье": squatEx,
 			"присидане":  squatEx,
 			"присиданий": squatEx,
+			// barbellSquat синонимы → squat
+			"присед со штангой":  squatEx,
+			"приседы со штангой": squatEx,
+			"присед штанга":      squatEx,
 
 			// lungeEx
 			"выпады":  lungeEx,
@@ -316,6 +328,17 @@ var (
 			"пробежку": joggingEx,
 			"бежал":    joggingEx,
 
+			// walkingEx
+			"ходьба":   walkingEx,
+			"хотьба":   walkingEx,
+			"ходьбу":   walkingEx,
+			"хотьбу":   walkingEx,
+			"прогулка": walkingEx,
+			"прогулку": walkingEx,
+			"ходил":    walkingEx,
+			"хадил":    walkingEx,
+			"гулял":    walkingEx,
+
 			// benchPressEx
 			"жим":      benchPressEx,
 			"жим лёжа": benchPressEx,
@@ -334,17 +357,47 @@ var (
 			"станавую":      deadliftEx,
 			"станавую тягу": deadliftEx,
 
-			// barbellSquatEx
-			"присед со штангой":  barbellSquatEx,
-			"приседы со штангой": barbellSquatEx,
-			"присед штанга":      barbellSquatEx,
-
 			// plankEx
 			"планка":  plankEx,
 			"планку":  plankEx,
 			"планки":  plankEx,
 			"планке":  plankEx,
 			"планкой": plankEx,
+
+			// wallSitEx
+			"стульчик":   wallSitEx,
+			"стульчек":   wallSitEx,
+			"стулчик":    wallSitEx,
+			"стулчек":    wallSitEx,
+			"стульчиком": wallSitEx,
+
+			// hangEx
+			"вис":                hangEx,
+			"вис на турнике":     hangEx,
+			"вис на перекладине": hangEx,
+			"висел":              hangEx,
+
+			// hollowHoldEx
+			"лодочка": hollowHoldEx,
+			"лодочку": hollowHoldEx,
+			"ладочка": hollowHoldEx,
+
+			// supermanEx
+			"супермен":  supermanEx,
+			"суперман":  supermanEx,
+			"супермена": supermanEx,
+
+			// sidePlankEx
+			"боковая планка": sidePlankEx,
+			"баковая планка": sidePlankEx,
+			"боковая планку": sidePlankEx,
+			"боковую планку": sidePlankEx,
+
+			// weightHoldEx
+			"удержание веса": weightHoldEx,
+			"удержание":      weightHoldEx,
+			"удиржание веса": weightHoldEx,
+			"удиржание":      weightHoldEx,
 
 			// hyperextensionEx
 			"гиперэкстензия": hyperextensionEx,
@@ -604,6 +657,10 @@ var (
 			"sqats":   squatEx,
 			"squaut":  squatEx,
 			"squauts": squatEx,
+			// barbellSquat синонимы → squat
+			"barbell squat":  squatEx,
+			"barbell squats": squatEx,
+			"barbellsquat":   squatEx,
 
 			// lungeEx
 			"lunge":  lungeEx,
@@ -654,6 +711,12 @@ var (
 			"trot":    joggingEx,
 			"sprint":  joggingEx,
 
+			// walkingEx
+			"walking": walkingEx,
+			"walk":    walkingEx,
+			"hike":    walkingEx,
+			"hiking":  walkingEx,
+
 			// benchPressEx
 			"bench":       benchPressEx,
 			"bench press": benchPressEx,
@@ -664,14 +727,41 @@ var (
 			"deadlifts": deadliftEx,
 			"dead lift": deadliftEx,
 
-			// barbellSquatEx
-			"barbell squat":  barbellSquatEx,
-			"barbell squats": barbellSquatEx,
-			"barbellsquat":   barbellSquatEx,
-
 			// plankEx
 			"plank":  plankEx,
 			"planks": plankEx,
+
+			// wallSitEx
+			"wall sit":  wallSitEx,
+			"wall sits": wallSitEx,
+			"wallsit":   wallSitEx,
+
+			// hangEx
+			"hang":      hangEx,
+			"dead hang": hangEx,
+			"deadhang":  hangEx,
+			"bar hang":  hangEx,
+
+			// hollowHoldEx
+			"hollow hold":  hollowHoldEx,
+			"hollow holds": hollowHoldEx,
+			"hollowhold":   hollowHoldEx,
+			"hollow":       hollowHoldEx,
+
+			// supermanEx
+			"superman":      supermanEx,
+			"superman hold": supermanEx,
+			"supermans":     supermanEx,
+
+			// sidePlankEx
+			"side plank":  sidePlankEx,
+			"side planks": sidePlankEx,
+			"sideplank":   sidePlankEx,
+
+			// weightHoldEx
+			"weight hold":  weightHoldEx,
+			"weight holds": weightHoldEx,
+			"weighthold":   weightHoldEx,
 
 			// hyperextensionEx
 			"hyperextension":  hyperextensionEx,
@@ -956,10 +1046,16 @@ var (
 			hyperextensionEx:   "гиперэкстензия",
 			legRaiseEx:         "подъём ног",
 			joggingEx:          "бег",
+			walkingEx:          "ходьба",
 			plankEx:            "планка",
+			wallSitEx:          "стульчик",
+			hangEx:             "вис",
+			hollowHoldEx:       "лодочка",
+			supermanEx:         "супермен",
+			sidePlankEx:        "боковая планка",
+			weightHoldEx:       "удержание веса",
 			benchPressEx:       "жим лёжа",
 			deadliftEx:         "становая тяга",
-			barbellSquatEx:     "присед со штангой",
 			latPulldownEx:      "тяга верхнего блока",
 			legPressEx:         "жим ногами",
 			preacherCurlEx:     "скамья Скотта",
@@ -989,10 +1085,16 @@ var (
 			hyperextensionEx:   "hyperextension",
 			legRaiseEx:         "leg raise",
 			joggingEx:          "jogging",
+			walkingEx:          "walking",
 			plankEx:            "plank",
+			wallSitEx:          "wall sit",
+			hangEx:             "hang",
+			hollowHoldEx:       "hollow hold",
+			supermanEx:         "superman",
+			sidePlankEx:        "side plank",
+			weightHoldEx:       "weight hold",
 			benchPressEx:       "bench press",
 			deadliftEx:         "deadlift",
-			barbellSquatEx:     "barbell squat",
 			latPulldownEx:      "lat pulldown",
 			legPressEx:         "leg press",
 			preacherCurlEx:     "preacher curl",
@@ -1056,6 +1158,8 @@ const (
 	weightRequired
 	durationRequired
 	distanceRequired
+	distOrTimeRequired
+	weightAndDurationRequired
 	paramInvalid
 	commonHelpMsg
 	addHelpMsg
@@ -1089,35 +1193,41 @@ const (
 	choosePeriod
 	addedConfirmation
 	orWriteText
+	skipBtn
+	chooseOptionalWeight
+	chooseOptionalDistance
+	chooseOptionalDuration
 )
 
 var (
 	messagesByLang = map[language]map[int]string{
 		langRU: { //nolint:dupl
-			emptyMessage:     "Чё?",
-			listCmd:          "Список поддерживаемых команд",
-			listEx:           "Список поддерживаемых упражнений",
-			listPeriod:       "Список поддерживаемых текстовых периодов",
-			cantRecognizeCmd: "Команда не распознана",
-			cmdNotSupported:  "Команда не поддерживается",
-			emptyEx:          "Упражнение не задано",
-			cantRecognizeEx:  "Упражнение не распознано",
-			cntRequired:      "Для этого упражнения требуется ввести количество повторений",
-			cntInvalid:       "Указано некорректное количество повторений",
-			cntGE:            "Количество повторений должно быть от 1 и более",
-			exAdded:          "Добавлено ✅",
-			periodsInvalid:   "Нераспознаные периоды",
-			nothingFound:     "Ничего не найдено 😢",
-			tableExCol:       "упражнение",
-			tableCntCol:      "кол-во",
-			tableSetCol:      "подходы",
-			tableWeightCol:   "вес",
-			tableDistCol:     "дистанция",
-			tableTimeCol:     "время",
-			weightRequired:   "Для этого упражнения нужно указать вес. Пример: жим 80кг 10",
-			durationRequired: "Для этого упражнения нужно указать время. Пример: планка 90сек",
-			distanceRequired: "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
-			paramInvalid:     "Не удалось распознать параметр: %s",
+			emptyMessage:              "Чё?",
+			listCmd:                   "Список поддерживаемых команд",
+			listEx:                    "Список поддерживаемых упражнений",
+			listPeriod:                "Список поддерживаемых текстовых периодов",
+			cantRecognizeCmd:          "Команда не распознана",
+			cmdNotSupported:           "Команда не поддерживается",
+			emptyEx:                   "Упражнение не задано",
+			cantRecognizeEx:           "Упражнение не распознано",
+			cntRequired:               "Для этого упражнения требуется ввести количество повторений",
+			cntInvalid:                "Указано некорректное количество повторений",
+			cntGE:                     "Количество повторений должно быть от 1 и более",
+			exAdded:                   "Добавлено ✅",
+			periodsInvalid:            "Нераспознаные периоды",
+			nothingFound:              "Ничего не найдено 😢",
+			tableExCol:                "упражнение",
+			tableCntCol:               "кол-во",
+			tableSetCol:               "подходы",
+			tableWeightCol:            "вес",
+			tableDistCol:              "дистанция",
+			tableTimeCol:              "время",
+			weightRequired:            "Для этого упражнения нужно указать вес. Пример: жим 80кг 10",
+			durationRequired:          "Для этого упражнения нужно указать время. Пример: планка 90сек",
+			distanceRequired:          "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
+			distOrTimeRequired:        "Нужно указать хотя бы дистанцию или время. Пример: бег 5км или бег 25мин",
+			weightAndDurationRequired: "Нужно указать вес и время. Пример: удержание 40кг 30сек",
+			paramInvalid:              "Не удалось распознать параметр: %s",
 			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
 				"Ты же ведь занимаешься спортом, верно?🤔\n\n" +
 				"Пиши мне в личные сообщения. В группах обращайся ко мне вот так: `@%s`\n\n" +
@@ -1159,51 +1269,57 @@ var (
 
 			welcomeMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
 				"Используй кнопки внизу для быстрого доступа к командам.",
-			chooseExercise:       "Выбери упражнение:",
-			chooseExerciseOrText: "Выбери упражнение или напиши текстом.",
-			yourFrequent:         "Твои частые:",
-			chooseWeight:         "%s — укажи вес:",
-			chooseCount:          "%s — сколько повторений?",
-			chooseDistance:       "%s — укажи дистанцию:",
-			chooseDuration:       "%s — укажи время:",
-			enterCustomWeight:    "Введи вес (например: 85кг или 85)",
-			enterCustomCount:     "Введи количество повторений",
-			enterCustomDistance:  "Введи дистанцию (например: 5км или 5000м)",
-			enterCustomDuration:  "Введи время (например: 25мин или 90сек)",
-			customInputBtn:       "Другой",
-			cancelBtn:            "Отмена",
-			moreBtn:              "Ещё >>",
-			backBtn:              "<< Назад",
-			allExBtn:             "Всё",
-			choosePeriod:         "%s — за какой период?",
-			addedConfirmation:    "Добавлено ✅ %s: %s",
-			orWriteText:          "Или напиши текстом",
+			chooseExercise:         "Выбери упражнение:",
+			chooseExerciseOrText:   "Выбери упражнение или напиши текстом.",
+			yourFrequent:           "Твои частые:",
+			chooseWeight:           "%s — укажи вес:",
+			chooseCount:            "%s — сколько повторений?",
+			chooseDistance:         "%s — укажи дистанцию:",
+			chooseDuration:         "%s — укажи время:",
+			enterCustomWeight:      "Введи вес (например: 85кг или 85)",
+			enterCustomCount:       "Введи количество повторений",
+			enterCustomDistance:    "Введи дистанцию (например: 5км или 5000м)",
+			enterCustomDuration:    "Введи время (например: 25мин или 90сек)",
+			customInputBtn:         "Другой",
+			cancelBtn:              "Отмена",
+			moreBtn:                "Ещё >>",
+			backBtn:                "<< Назад",
+			allExBtn:               "Всё",
+			choosePeriod:           "%s — за какой период?",
+			addedConfirmation:      "Добавлено ✅ %s: %s",
+			orWriteText:            "Или напиши текстом",
+			skipBtn:                "Пропустить",
+			chooseOptionalWeight:   "%s — добавить вес? (необязательно)",
+			chooseOptionalDistance: "%s — указать дистанцию? (необязательно)",
+			chooseOptionalDuration: "%s — указать время? (необязательно)",
 		},
 		langEN: { //nolint:dupl
-			emptyMessage:     "What?",
-			listCmd:          "Supported commands",
-			listEx:           "Supported exercises",
-			listPeriod:       "Text period list",
-			cantRecognizeCmd: "Can't recognize the command",
-			cmdNotSupported:  "Command is not supported",
-			emptyEx:          "Exercise is not assigned",
-			cantRecognizeEx:  "Can't recognize the exercise",
-			cntRequired:      "This exercise requires you to enter the number of repetitions",
-			cntInvalid:       "Incorrect number of repetitions",
-			cntGE:            "The number of repetitions should be 1 or more",
-			exAdded:          "Added ✅",
-			periodsInvalid:   "Invalid periods",
-			nothingFound:     "Nothing found 😢",
-			tableExCol:       "exercise",
-			tableCntCol:      "reps",
-			tableSetCol:      "sets",
-			tableWeightCol:   "weight",
-			tableDistCol:     "distance",
-			tableTimeCol:     "time",
-			weightRequired:   "Weight is required for this exercise. Example: bench 80kg 10",
-			durationRequired: "Duration is required for this exercise. Example: plank 90sec",
-			distanceRequired: "Distance is required for this exercise. Example: run 5km 25min",
-			paramInvalid:     "Can't recognize parameter: %s",
+			emptyMessage:              "What?",
+			listCmd:                   "Supported commands",
+			listEx:                    "Supported exercises",
+			listPeriod:                "Text period list",
+			cantRecognizeCmd:          "Can't recognize the command",
+			cmdNotSupported:           "Command is not supported",
+			emptyEx:                   "Exercise is not assigned",
+			cantRecognizeEx:           "Can't recognize the exercise",
+			cntRequired:               "This exercise requires you to enter the number of repetitions",
+			cntInvalid:                "Incorrect number of repetitions",
+			cntGE:                     "The number of repetitions should be 1 or more",
+			exAdded:                   "Added ✅",
+			periodsInvalid:            "Invalid periods",
+			nothingFound:              "Nothing found 😢",
+			tableExCol:                "exercise",
+			tableCntCol:               "reps",
+			tableSetCol:               "sets",
+			tableWeightCol:            "weight",
+			tableDistCol:              "distance",
+			tableTimeCol:              "time",
+			weightRequired:            "Weight is required for this exercise. Example: bench 80kg 10",
+			durationRequired:          "Duration is required for this exercise. Example: plank 90sec",
+			distanceRequired:          "Distance is required for this exercise. Example: run 5km 25min",
+			distOrTimeRequired:        "Distance or duration is required. Example: run 5km or run 25min",
+			weightAndDurationRequired: "Weight and duration are required. Example: weight hold 40kg 30sec",
+			paramInvalid:              "Can't recognize parameter: %s",
 			commonHelpMsg: "Hi there! I can keep your training statistics.\n" +
 				"You do sports, right?🤔\n\n" +
 				"Write me direct messages. In groups, mention me like this: `@%s`\n\n" +
@@ -1245,25 +1361,29 @@ var (
 
 			welcomeMsg: "Hi there! I can keep your training statistics.\n" +
 				"Use the buttons below for quick access to commands.",
-			chooseExercise:       "Choose an exercise:",
-			chooseExerciseOrText: "Choose an exercise or type it.",
-			yourFrequent:         "Your frequent:",
-			chooseWeight:         "%s — enter weight:",
-			chooseCount:          "%s — how many reps?",
-			chooseDistance:       "%s — enter distance:",
-			chooseDuration:       "%s — enter duration:",
-			enterCustomWeight:    "Enter weight (e.g. 85kg or 85)",
-			enterCustomCount:     "Enter the number of reps",
-			enterCustomDistance:  "Enter distance (e.g. 5km or 5000m)",
-			enterCustomDuration:  "Enter duration (e.g. 25min or 90sec)",
-			customInputBtn:       "Other",
-			cancelBtn:            "Cancel",
-			moreBtn:              "More >>",
-			backBtn:              "<< Back",
-			allExBtn:             "All",
-			choosePeriod:         "%s — for what period?",
-			addedConfirmation:    "Added ✅ %s: %s",
-			orWriteText:          "Or type it",
+			chooseExercise:         "Choose an exercise:",
+			chooseExerciseOrText:   "Choose an exercise or type it.",
+			yourFrequent:           "Your frequent:",
+			chooseWeight:           "%s — enter weight:",
+			chooseCount:            "%s — how many reps?",
+			chooseDistance:         "%s — enter distance:",
+			chooseDuration:         "%s — enter duration:",
+			enterCustomWeight:      "Enter weight (e.g. 85kg or 85)",
+			enterCustomCount:       "Enter the number of reps",
+			enterCustomDistance:    "Enter distance (e.g. 5km or 5000m)",
+			enterCustomDuration:    "Enter duration (e.g. 25min or 90sec)",
+			customInputBtn:         "Other",
+			cancelBtn:              "Cancel",
+			moreBtn:                "More >>",
+			backBtn:                "<< Back",
+			allExBtn:               "All",
+			choosePeriod:           "%s — for what period?",
+			addedConfirmation:      "Added ✅ %s: %s",
+			orWriteText:            "Or type it",
+			skipBtn:                "Skip",
+			chooseOptionalWeight:   "%s — add weight? (optional)",
+			chooseOptionalDistance: "%s — add distance? (optional)",
+			chooseOptionalDuration: "%s — add duration? (optional)",
 		},
 	}
 
@@ -1351,15 +1471,17 @@ var exerciseOrder = []Exercise{
 	pullUpEx, pushUpEx, dipsEx, absEx, squatEx, lungeEx,
 	burpeeEx, skippingRopeEx, muscleUpEx, hyperextensionEx, legRaiseEx,
 	// Reps+Weight — зал
-	benchPressEx, deadliftEx, barbellSquatEx, shoulderPressEx,
+	benchPressEx, deadliftEx, shoulderPressEx,
 	bentOverRowEx, latPulldownEx, seatedRowEx, legPressEx,
 	dumbbellCurlEx, preacherCurlEx, tricepPushdownEx,
 	legExtensionEx, legCurlEx, chestFlyEx,
 	romanianDeadliftEx, hipThrustEx, lateralRaiseEx, shrugEx,
 	// Duration
-	plankEx,
-	// Distance
-	joggingEx,
+	plankEx, wallSitEx, hangEx, hollowHoldEx, supermanEx, sidePlankEx,
+	// DurationWeight
+	weightHoldEx,
+	// DistTime
+	joggingEx, walkingEx,
 }
 
 const exercisesPerPage = 9
@@ -1368,7 +1490,6 @@ var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 	// CategoryRepsWeight
 	benchPressEx:       CategoryRepsWeight,
 	deadliftEx:         CategoryRepsWeight,
-	barbellSquatEx:     CategoryRepsWeight,
 	latPulldownEx:      CategoryRepsWeight,
 	legPressEx:         CategoryRepsWeight,
 	preacherCurlEx:     CategoryRepsWeight,
@@ -1387,9 +1508,39 @@ var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 
 	// CategoryDistTime
 	joggingEx: CategoryDistTime,
+	walkingEx: CategoryDistTime,
 
 	// CategoryDuration
-	plankEx: CategoryDuration,
+	plankEx:      CategoryDuration,
+	wallSitEx:    CategoryDuration,
+	hangEx:       CategoryDuration,
+	hollowHoldEx: CategoryDuration,
+	supermanEx:   CategoryDuration,
+	sidePlankEx:  CategoryDuration,
+
+	// CategoryDurationWeight
+	weightHoldEx: CategoryDurationWeight,
+}
+
+// exerciseOptionalParamsMap — необязательные параметры для конкретных упражнений
+var exerciseOptionalParamsMap = map[Exercise][]ParamType{
+	// CategoryReps с опциональным весом
+	pullUpEx:         {ParamWeight},
+	pushUpEx:         {ParamWeight},
+	dipsEx:           {ParamWeight},
+	squatEx:          {ParamWeight},
+	lungeEx:          {ParamWeight},
+	hyperextensionEx: {ParamWeight},
+
+	// CategoryDuration с опциональным весом
+	plankEx:     {ParamWeight},
+	hangEx:      {ParamWeight},
+	wallSitEx:   {ParamWeight},
+	sidePlankEx: {ParamWeight},
+
+	// CategoryDistTime с опциональным весом
+	joggingEx: {ParamWeight},
+	walkingEx: {ParamWeight},
 }
 
 var unitSuffixByLang = map[language]map[string]UnitDef{

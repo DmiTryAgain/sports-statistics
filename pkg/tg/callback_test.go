@@ -105,6 +105,21 @@ func TestParseCallbackData(t *testing.T) { //nolint:gocognit
 			want: CallbackAction{Type: cbCancel},
 		},
 		{
+			name: "skip weight",
+			data: "sk|w",
+			want: CallbackAction{Type: cbSkipParam, CustomTarget: TargetWeight},
+		},
+		{
+			name: "skip distance",
+			data: "sk|d",
+			want: CallbackAction{Type: cbSkipParam, CustomTarget: TargetDistance},
+		},
+		{
+			name: "skip duration",
+			data: "sk|t",
+			want: CallbackAction{Type: cbSkipParam, CustomTarget: TargetDuration},
+		},
+		{
 			name:    "empty data",
 			data:    "",
 			wantErr: true,

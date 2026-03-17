@@ -198,6 +198,38 @@ func TestMessageHandler_multiWordsEx(t *testing.T) {
 			wantExIdx:    1,
 		},
 		{
+			name:         "multiword ex where first word is different ex ru (жим ногами)",
+			words:        []string{"жим", "ногами", "100кг", "10"},
+			lang:         langRU,
+			wantExercise: legPressEx,
+			wantOk:       true,
+			wantExIdx:    1,
+		},
+		{
+			name:         "multiword ex where first word is different ex ru (жим стоя)",
+			words:        []string{"жим", "стоя", "50кг", "8"},
+			lang:         langRU,
+			wantExercise: shoulderPressEx,
+			wantOk:       true,
+			wantExIdx:    1,
+		},
+		{
+			name:         "short ex still works when no longer match ru (жим)",
+			words:        []string{"жим", "80кг", "10"},
+			lang:         langRU,
+			wantExercise: benchPressEx,
+			wantOk:       true,
+			wantExIdx:    0,
+		},
+		{
+			name:         "multiword ex where first word is not ex ru (армейский жим)",
+			words:        []string{"армейский", "жим", "40кг", "6"},
+			lang:         langRU,
+			wantExercise: shoulderPressEx,
+			wantOk:       true,
+			wantExIdx:    1,
+		},
+		{
 			name:         "no valid exercises",
 			words:        []string{"ahahahah", "invalid", "228"},
 			lang:         langEN,
@@ -390,8 +422,20 @@ func TestParseExerciseParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:  "missing duration for dist time",
+			name:  "dist only for dist time is valid",
 			words: []string{"5км"}, category: CategoryDistTime, lang: langRU,
+			wantErr:  false,
+			wantDist: ptr(5000.0),
+		},
+		{
+			name:  "duration only for dist time is valid",
+			words: []string{"25мин"}, category: CategoryDistTime, lang: langRU,
+			wantErr: false,
+			wantDur: ptr(1500.0),
+		},
+		{
+			name:  "nothing for dist time is invalid",
+			words: []string{}, category: CategoryDistTime, lang: langRU,
 			wantErr: true,
 		},
 	}
@@ -491,8 +535,6 @@ func floatPtrEqual(a, b *float64) bool {
 }
 
 func TestMessageHandler_handleAdd(t *testing.T) {
-	t.Skip()
-
 	ctx := t.Context()
 	tests := []struct {
 		name    string
@@ -598,6 +640,88 @@ func TestMessageHandler_handleAdd(t *testing.T) {
 			rawMsg:  "планка",
 			lang:    langRU,
 			want:    messagesByLang[langRU][durationRequired],
+			wantErr: false,
+		},
+		// CategoryDistTime: хотя бы одно из dist/time
+		{
+			name:    "jogging dist only ru",
+			rawMsg:  "бег 5км",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
+			wantErr: false,
+		},
+		{
+			name:    "jogging duration only ru",
+			rawMsg:  "бег 25мин",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
+			wantErr: false,
+		},
+		{
+			name:    "jogging nothing ru",
+			rawMsg:  "бег",
+			lang:    langRU,
+			want:    messagesByLang[langRU][distOrTimeRequired],
+			wantErr: false,
+		},
+		// Walking
+		{
+			name:    "walking dist ru",
+			rawMsg:  "ходьба 3км",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
+			wantErr: false,
+		},
+		{
+			name:    "walking duration en",
+			rawMsg:  "walking 30min",
+			lang:    langEN,
+			want:    messagesByLang[langEN][exAdded],
+			wantErr: false,
+		},
+		// CategoryDurationWeight
+		{
+			name:    "weight hold ru",
+			rawMsg:  "удержание 40кг 30сек",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
+			wantErr: false,
+		},
+		{
+			name:    "weight hold missing weight ru",
+			rawMsg:  "удержание 30сек",
+			lang:    langRU,
+			want:    messagesByLang[langRU][weightAndDurationRequired],
+			wantErr: false,
+		},
+		{
+			name:    "weight hold missing duration ru",
+			rawMsg:  "удержание 40кг",
+			lang:    langRU,
+			want:    messagesByLang[langRU][weightAndDurationRequired],
+			wantErr: false,
+		},
+		// New duration exercises
+		{
+			name:    "wall sit ru",
+			rawMsg:  "стульчик 60сек",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
+			wantErr: false,
+		},
+		{
+			name:    "hang ru",
+			rawMsg:  "вис 45сек",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
+			wantErr: false,
+		},
+		// Squat with optional weight (text input)
+		{
+			name:    "squat with weight ru",
+			rawMsg:  "приседания 80кг 10",
+			lang:    langRU,
+			want:    messagesByLang[langRU][exAdded],
 			wantErr: false,
 		},
 	}

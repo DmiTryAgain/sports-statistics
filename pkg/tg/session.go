@@ -39,6 +39,21 @@ const (
 	TargetDuration
 )
 
+func customTargetToParamType(t CustomValueTarget) ParamType {
+	switch t {
+	case TargetWeight:
+		return ParamWeight
+	case TargetCount:
+		return ParamCount
+	case TargetDistance:
+		return ParamDistance
+	case TargetDuration:
+		return ParamDuration
+	default:
+		return ParamCount
+	}
+}
+
 // UserSession хранит состояние текущего диалога пользователя
 type UserSession struct {
 	State SessionState
@@ -50,6 +65,9 @@ type UserSession struct {
 
 	// Для "Другой" — какой параметр ожидаем
 	CustomTarget CustomValueTarget
+
+	// Пропущенные необязательные параметры
+	SkippedParams map[ParamType]struct{}
 
 	// Контекст показа статистики
 	ShowExercises Exercises
@@ -76,6 +94,15 @@ func (s *UserSession) String() string {
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// isParamSkipped проверяет, был ли параметр пропущен пользователем
+func (s *UserSession) isParamSkipped(p ParamType) bool {
+	if s.SkippedParams == nil {
+		return false
+	}
+	_, ok := s.SkippedParams[p]
+	return ok
 }
 
 // IsExpired проверяет, не истекла ли сессия

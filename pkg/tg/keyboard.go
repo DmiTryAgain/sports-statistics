@@ -3,6 +3,7 @@ package tg
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 
@@ -247,7 +248,22 @@ func formatQuickAddButton(f db.FrequentExercise, lang language) string {
 			return fmt.Sprintf("%s %s", name, formatDuration(*f.Params.DurationSec, lang))
 		}
 		return name
+	case CategoryDurationWeight:
+		if f.Params != nil {
+			parts := name
+			if f.Params.WeightKg != nil {
+				parts += " " + formatWeight(*f.Params.WeightKg, lang)
+			}
+			if f.Params.DurationSec != nil {
+				parts += " " + formatDuration(*f.Params.DurationSec, lang)
+			}
+			return parts
+		}
+		return name
 	default:
+		if f.Params != nil && f.Params.WeightKg != nil {
+			return fmt.Sprintf("%s %s ×%g", name, formatWeight(*f.Params.WeightKg, lang), f.Count)
+		}
 		return fmt.Sprintf("%s ×%g", name, f.Count)
 	}
 }
@@ -283,8 +299,22 @@ func formatAddConfirmation(ex Exercise, cnt float64, params *db.StatisticParams,
 		if params != nil && params.DurationSec != nil {
 			detail = formatDuration(*params.DurationSec, lang)
 		}
+	case CategoryDurationWeight:
+		if params != nil {
+			var parts []string
+			if params.WeightKg != nil {
+				parts = append(parts, formatWeight(*params.WeightKg, lang))
+			}
+			if params.DurationSec != nil {
+				parts = append(parts, formatDuration(*params.DurationSec, lang))
+			}
+			detail = strings.Join(parts, " ")
+		}
 	default:
 		detail = fmt.Sprintf("×%g", cnt)
+		if params != nil && params.WeightKg != nil {
+			detail = fmt.Sprintf("%s × %g", formatWeight(*params.WeightKg, lang), cnt)
+		}
 	}
 
 	return fmt.Sprintf(messagesByLang[lang][addedConfirmation], name, detail)
@@ -301,4 +331,79 @@ func customAndCancelRow(lang language, target string) []tgbotapi.InlineKeyboardB
 		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][customInputBtn], encodeCallbackData("cu", target)),
 		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][cancelBtn], "x"),
 	}
+}
+
+func optionalDistanceInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup {
+	distances := []float64{1000, 1500, 2000, 2500, 3000, 5000}
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+	row := make([]tgbotapi.InlineKeyboardButton, 0, len(distances))
+	for i, d := range distances {
+		text := formatDistance(d, lang)
+		data := encodeCallbackData("d", strconv.FormatFloat(d, 'f', -1, 64))
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(text, data))
+		if (i+1)%buttonsPerRow == 0 || i == len(distances)-1 {
+			rows = append(rows, row)
+			row = nil
+		}
+	}
+
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][customInputBtn], encodeCallbackData("cu", "d")),
+		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][skipBtn], encodeCallbackData("sk", "d")),
+	})
+	rows = append(rows, cancelRow(lang))
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func optionalDurationInlineKeyboard(category ExerciseCategory, lang language) tgbotapi.InlineKeyboardMarkup {
+	durations := []float64{900, 1200, 1500, 1800, 2700, 3600}
+	if category == CategoryDuration || category == CategoryDurationWeight {
+		durations = []float64{30, 45, 60, 90, 120, 180}
+	}
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+	row := make([]tgbotapi.InlineKeyboardButton, 0, len(durations))
+	for i, d := range durations {
+		text := formatDuration(d, lang)
+		data := encodeCallbackData("t", strconv.FormatFloat(d, 'f', -1, 64))
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(text, data))
+		if (i+1)%buttonsPerRow == 0 || i == len(durations)-1 {
+			rows = append(rows, row)
+			row = nil
+		}
+	}
+
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][customInputBtn], encodeCallbackData("cu", "t")),
+		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][skipBtn], encodeCallbackData("sk", "t")),
+	})
+	rows = append(rows, cancelRow(lang))
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func optionalWeightInlineKeyboard(userWeights []float64, lang language) tgbotapi.InlineKeyboardMarkup {
+	weights := userWeights
+	if len(weights) == 0 {
+		weights = []float64{20, 40, 60, 80, 100}
+	}
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+	row := make([]tgbotapi.InlineKeyboardButton, 0, len(weights))
+	for i, w := range weights {
+		text := formatWeight(w, lang)
+		data := encodeCallbackData("w", strconv.FormatFloat(w, 'f', -1, 64))
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(text, data))
+		if (i+1)%buttonsPerRow == 0 || i == len(weights)-1 {
+			rows = append(rows, row)
+			row = nil
+		}
+	}
+
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][customInputBtn], encodeCallbackData("cu", "w")),
+		tgbotapi.NewInlineKeyboardButtonData(messagesByLang[lang][skipBtn], encodeCallbackData("sk", "w")),
+	})
+	rows = append(rows, cancelRow(lang))
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }

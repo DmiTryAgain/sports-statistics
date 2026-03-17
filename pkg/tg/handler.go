@@ -264,10 +264,11 @@ func parseValueWithUnit(word string, lang language) (value float64, unit UnitDef
 }
 
 var (
-	errCountRequired    = errors.New("count required")
-	errWeightRequired   = errors.New("weight required")
-	errDistanceRequired = errors.New("distance required")
-	errDurationRequired = errors.New("duration required")
+	errCountRequired      = errors.New("count required")
+	errWeightRequired     = errors.New("weight required")
+	errDistanceRequired   = errors.New("distance required")
+	errDurationRequired   = errors.New("duration required")
+	errDistOrTimeRequired = errors.New("distance or duration required")
 )
 
 func (pp *ParsedParams) addParam(pt ParamType, val float64) {
@@ -299,30 +300,6 @@ func (pp *ParsedParams) addParam(pt ParamType, val float64) {
 	}
 }
 
-func (pp *ParsedParams) validate(category ExerciseCategory) error {
-	for _, rp := range category.RequiredParams() {
-		switch rp {
-		case ParamCount:
-			if pp.Count == nil {
-				return errCountRequired
-			}
-		case ParamWeight:
-			if pp.WeightKg == nil {
-				return errWeightRequired
-			}
-		case ParamDistance:
-			if pp.DistanceM == nil {
-				return errDistanceRequired
-			}
-		case ParamDuration:
-			if pp.DurationSec == nil {
-				return errDurationRequired
-			}
-		}
-	}
-	return nil
-}
-
 // parseExerciseParams парсит слова после упражнения, извлекая параметры в соответствии с категорией.
 func parseExerciseParams(words []string, category ExerciseCategory, lang language) (ParsedParams, error) {
 	var pp ParsedParams
@@ -352,7 +329,7 @@ func parseExerciseParams(words []string, category ExerciseCategory, lang languag
 		pp.addParam(ParamCount, value)
 	}
 
-	if err := pp.validate(category); err != nil {
+	if err := category.ValidateParams(&pp); err != nil {
 		return pp, err
 	}
 
@@ -415,9 +392,11 @@ func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang lan
 	case CategoryRepsWeight:
 		return messagesByLang[lang][weightRequired]
 	case CategoryDistTime:
-		return messagesByLang[lang][distanceRequired]
+		return messagesByLang[lang][distOrTimeRequired]
 	case CategoryDuration:
 		return messagesByLang[lang][durationRequired]
+	case CategoryDurationWeight:
+		return messagesByLang[lang][weightAndDurationRequired]
 	default:
 		return messagesByLang[lang][cntRequired]
 	}
@@ -546,21 +525,22 @@ func (m *MessageHandler) extractExerciseAndItsPosition(words []string, lang lang
 	for len(words) > exIdx+1 {
 		multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[exIdx+1])
 		multiwordEx, exists := exerciseByLang[lang][multiwordExName]
-		if !exists && !ok { // Если не распознано, пробуем со следующим словом, но только если мы ещё не находили упражнение
-			exIdx++
-			continue
-		}
 
-		// Если оно реально состоит из 2х и более слов, снова сдвигаем i на следующее слово
-		if exercise.isZero() || exercise == multiwordEx {
+		if exists {
+			// Более длинное совпадение всегда приоритетнее короткого
 			ok = true
 			exercise = multiwordEx
 			exIdx++
 			continue
 		}
 
-		// Останавливаемся, если упражнения различаются или если не нашли.
-		// Мы захватили уже следующее или не найдено ни одного упражнения.
+		if !ok {
+			// Ещё не находили упражнение — пробуем со следующим словом
+			exIdx++
+			continue
+		}
+
+		// Уже нашли упражнение ранее, а более длинное не найдено — останавливаемся
 		break
 	}
 
@@ -955,6 +935,8 @@ func (m *MessageHandler) handleCallback(ctx context.Context, upd tgbotapi.Update
 		m.handleCBShowAll(ctx, cb, session, userID)
 	case cbShowPeriod:
 		m.handleCBShowPeriod(ctx, cb, session, userID, action)
+	case cbSkipParam:
+		m.handleCBSkipParam(ctx, cb, session, userID, action)
 	case cbCancel:
 		m.handleCBCancel(ctx, cb, session, userID)
 	case cbExercisePage:
@@ -1125,6 +1107,18 @@ func (m *MessageHandler) handleCBCancel(_ context.Context, cb *tgbotapi.Callback
 	m.sessions.Delete(userID)
 }
 
+// handleCBSkipParam обрабатывает пропуск необязательного параметра
+func (m *MessageHandler) handleCBSkipParam(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	paramType := customTargetToParamType(action.CustomTarget)
+	if session.SkippedParams == nil {
+		session.SkippedParams = make(map[ParamType]struct{})
+	}
+	session.SkippedParams[paramType] = struct{}{}
+	m.sessions.Set(userID, session)
+	m.answerCallback(cb.ID, "")
+	m.advanceAddDialog(ctx, cb, session, userID)
+}
+
 // handleCBExercisePage обрабатывает переключение страницы упражнений
 func (m *MessageHandler) handleCBExercisePage(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, _ string, action CallbackAction) {
 	kb := exerciseInlineKeyboard(action.Page, session.Lang, action.Context)
@@ -1134,35 +1128,136 @@ func (m *MessageHandler) handleCBExercisePage(_ context.Context, cb *tgbotapi.Ca
 
 // advanceAddDialog проверяет, какие параметры ещё не заполнены, и показывает следующий шаг
 func (m *MessageHandler) advanceAddDialog(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	category := session.Exercise.Category()
-	required := category.RequiredParams()
+	if m.advanceRequired(ctx, cb, session, userID) {
+		return
+	}
+	if m.advanceSoftRequired(ctx, cb, session, userID) {
+		return
+	}
+	if m.advanceOptional(ctx, cb, session, userID) {
+		return
+	}
+	m.saveFromSession(ctx, cb, session, userID)
+}
 
-	for _, rp := range required {
+// advanceRequired показывает следующий незаполненный обязательный параметр. Возвращает true, если показал.
+func (m *MessageHandler) advanceRequired(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) bool {
+	for _, rp := range session.Exercise.Category().RequiredParams() {
 		switch rp {
 		case ParamWeight:
 			if session.Params.WeightKg == nil {
 				m.showWeightSelection(ctx, cb, session, userID)
-				return
+				return true
 			}
 		case ParamCount:
 			if session.Params.Count == nil {
 				m.showCountSelection(cb, session, userID)
-				return
+				return true
 			}
 		case ParamDistance:
 			if session.Params.DistanceM == nil {
 				m.showDistanceSelection(cb, session, userID)
-				return
+				return true
 			}
 		case ParamDuration:
 			if session.Params.DurationSec == nil {
 				m.showDurationSelection(cb, session, userID)
-				return
+				return true
 			}
 		}
 	}
+	return false
+}
 
-	m.saveFromSession(ctx, cb, session, userID)
+// advanceSoftRequired показывает soft-required параметры (хотя бы один из списка). Возвращает true, если показал.
+func (m *MessageHandler) advanceSoftRequired(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) bool {
+	for _, sp := range session.Exercise.Category().SoftRequiredParams() {
+		if session.isParamSkipped(sp) {
+			continue
+		}
+		switch sp {
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				m.showOptionalDistanceSelection(cb, session, userID)
+				return true
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				if session.Params.DistanceM != nil {
+					m.showOptionalDurationSelection(cb, session, userID)
+				} else {
+					m.showDurationSelection(cb, session, userID)
+				}
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// advanceOptional показывает следующий незаполненный необязательный параметр. Возвращает true, если показал.
+func (m *MessageHandler) advanceOptional(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) bool {
+	for _, op := range session.Exercise.OptionalParams() {
+		if session.isParamSkipped(op) {
+			continue
+		}
+		switch op {
+		case ParamWeight:
+			if session.Params.WeightKg == nil {
+				m.showOptionalWeightSelection(ctx, cb, session, userID)
+				return true
+			}
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				m.showOptionalDistanceSelection(cb, session, userID)
+				return true
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				m.showOptionalDurationSelection(cb, session, userID)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// showOptionalDistanceSelection показывает кнопки выбора дистанции с кнопкой "Пропустить"
+func (m *MessageHandler) showOptionalDistanceSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	session.State = StateAwaitDistance
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := optionalDistanceInlineKeyboard(session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+}
+
+// showOptionalDurationSelection показывает кнопки выбора времени с кнопкой "Пропустить"
+func (m *MessageHandler) showOptionalDurationSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	session.State = StateAwaitDuration
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := optionalDurationInlineKeyboard(session.Exercise.Category(), session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
+}
+
+// showOptionalWeightSelection показывает кнопки выбора веса с кнопкой "Пропустить"
+func (m *MessageHandler) showOptionalWeightSelection(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	weights, err := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
+	if err != nil {
+		m.Error(ctx, "fetch unique weights", "err", err)
+	}
+
+	session.State = StateAwaitWeight
+	m.sessions.Set(userID, session)
+
+	exName := exTextByLang[session.Lang][session.Exercise]
+	text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+	kb := optionalWeightInlineKeyboard(weights, session.Lang)
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
 }
 
 // showWeightSelection показывает кнопки выбора веса
@@ -1309,33 +1404,9 @@ func (m *MessageHandler) handleCustomValueInput(ctx context.Context, upd tgbotap
 
 	m.sessions.Set(userID, session)
 
-	// Проверяем, остались ли ещё незаполненные параметры
+	// Проверяем, все ли обязательные параметры заполнены
 	category := session.Exercise.Category()
-	required := category.RequiredParams()
-
-	allFilled := true
-	for _, rp := range required {
-		switch rp {
-		case ParamWeight:
-			if session.Params.WeightKg == nil {
-				allFilled = false
-			}
-		case ParamCount:
-			if session.Params.Count == nil {
-				allFilled = false
-			}
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				allFilled = false
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				allFilled = false
-			}
-		}
-	}
-
-	if allFilled {
+	if err := category.ValidateParams(&session.Params); err == nil {
 		m.saveFromSessionText(ctx, upd, session, userID)
 		return
 	}
@@ -1376,7 +1447,7 @@ func (m *MessageHandler) handleRemainingParamsText(ctx context.Context, upd tgbo
 
 	// Проверяем, всё ли заполнено
 	category := session.Exercise.Category()
-	if err := session.Params.validate(category); err == nil {
+	if err := category.ValidateParams(&session.Params); err == nil {
 		m.saveFromSessionText(ctx, upd, session, userID)
 		return nil
 	}

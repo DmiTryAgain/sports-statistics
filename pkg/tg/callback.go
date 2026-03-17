@@ -25,6 +25,7 @@ const (
 	cbShowPeriod
 	cbExercisePage
 	cbCancel
+	cbSkipParam
 )
 
 var errInvalidCallbackData = errors.New("invalid callback data")
@@ -71,6 +72,8 @@ func parseCallbackData(data string) (CallbackAction, error) {
 		return parseShowPeriodCallback(parts)
 	case "pg":
 		return parsePageCallback(parts)
+	case "sk":
+		return parseSkipParamCallback(parts)
 	case "x":
 		return CallbackAction{Type: cbCancel}, nil
 	default:
@@ -118,6 +121,26 @@ func parseCustomInputCallback(parts []string) (CallbackAction, error) {
 		return CallbackAction{}, fmt.Errorf("%w: unknown target %q", errInvalidCallbackData, parts[1])
 	}
 	return CallbackAction{Type: cbCustomInput, CustomTarget: target}, nil
+}
+
+func parseSkipParamCallback(parts []string) (CallbackAction, error) {
+	if len(parts) < 2 {
+		return CallbackAction{}, fmt.Errorf("%w: missing param type", errInvalidCallbackData)
+	}
+	var target CustomValueTarget
+	switch parts[1] {
+	case "w":
+		target = TargetWeight
+	case "c":
+		target = TargetCount
+	case "d":
+		target = TargetDistance
+	case "t":
+		target = TargetDuration
+	default:
+		return CallbackAction{}, fmt.Errorf("%w: unknown skip target %q", errInvalidCallbackData, parts[1])
+	}
+	return CallbackAction{Type: cbSkipParam, CustomTarget: target}, nil
 }
 
 func parseQuickAddCallback(parts []string) (CallbackAction, error) {

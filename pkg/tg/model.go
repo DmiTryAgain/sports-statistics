@@ -12,13 +12,14 @@ import (
 type ExerciseCategory int
 
 const (
-	CategoryReps       ExerciseCategory = iota // только повторения (текущие упражнения)
-	CategoryRepsWeight                         // повторения + вес
-	CategoryDistTime                           // дистанция + время
-	CategoryDuration                           // только время (длительность)
+	CategoryReps           ExerciseCategory = iota // только повторения (текущие упражнения)
+	CategoryRepsWeight                             // повторения + вес
+	CategoryDistTime                               // дистанция и/или время (хотя бы одно)
+	CategoryDuration                               // только время (длительность)
+	CategoryDurationWeight                         // время + вес
 )
 
-// RequiredParams возвращает список обязательных типов параметров для категории
+// RequiredParams возвращает список безусловно обязательных типов параметров для категории
 func (c ExerciseCategory) RequiredParams() []ParamType {
 	switch c {
 	case CategoryReps:
@@ -26,12 +27,74 @@ func (c ExerciseCategory) RequiredParams() []ParamType {
 	case CategoryRepsWeight:
 		return []ParamType{ParamWeight, ParamCount}
 	case CategoryDistTime:
-		return []ParamType{ParamDistance, ParamDuration}
+		return nil // хотя бы одно из (distance, duration), проверяется в ValidateParams
 	case CategoryDuration:
 		return []ParamType{ParamDuration}
+	case CategoryDurationWeight:
+		return []ParamType{ParamWeight, ParamDuration}
 	default:
 		return nil
 	}
+}
+
+// SoftRequiredParams возвращает параметры, из которых хотя бы один должен быть заполнен.
+// Для CategoryDistTime — дистанция или время.
+func (c ExerciseCategory) SoftRequiredParams() []ParamType {
+	switch c {
+	case CategoryDistTime:
+		return []ParamType{ParamDistance, ParamDuration}
+	default:
+		return nil
+	}
+}
+
+// ValidateParams проверяет наличие всех обязательных параметров.
+// Для CategoryDistTime — хотя бы одно из (distance, duration).
+func (c ExerciseCategory) ValidateParams(pp *ParsedParams) error {
+	// Проверяем безусловно обязательные
+	for _, rp := range c.RequiredParams() {
+		switch rp {
+		case ParamCount:
+			if pp.Count == nil {
+				return errCountRequired
+			}
+		case ParamWeight:
+			if pp.WeightKg == nil {
+				return errWeightRequired
+			}
+		case ParamDistance:
+			if pp.DistanceM == nil {
+				return errDistanceRequired
+			}
+		case ParamDuration:
+			if pp.DurationSec == nil {
+				return errDurationRequired
+			}
+		}
+	}
+
+	// Проверяем мягкие требования (хотя бы одно)
+	soft := c.SoftRequiredParams()
+	if len(soft) > 0 {
+		hasSome := false
+		for _, sp := range soft {
+			switch sp {
+			case ParamDistance:
+				if pp.DistanceM != nil {
+					hasSome = true
+				}
+			case ParamDuration:
+				if pp.DurationSec != nil {
+					hasSome = true
+				}
+			}
+		}
+		if !hasSome {
+			return errDistOrTimeRequired
+		}
+	}
+
+	return nil
 }
 
 // ParamType — тип параметра упражнения
@@ -128,6 +191,14 @@ func (e Exercise) Category() ExerciseCategory {
 		return CategoryReps
 	}
 	return cat
+}
+
+// OptionalParams возвращает список необязательных параметров для конкретного упражнения
+func (e Exercise) OptionalParams() []ParamType {
+	if params, ok := exerciseOptionalParamsMap[e]; ok {
+		return params
+	}
+	return nil
 }
 
 type Exercises []Exercise
