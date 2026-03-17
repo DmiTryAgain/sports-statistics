@@ -1404,15 +1404,10 @@ func (m *MessageHandler) handleCustomValueInput(ctx context.Context, upd tgbotap
 
 	m.sessions.Set(userID, session)
 
-	// Проверяем, все ли обязательные параметры заполнены
-	category := session.Exercise.Category()
-	if err := category.ValidateParams(&session.Params); err == nil {
+	// Показываем следующий шаг или сохраняем, если все параметры заполнены
+	if !m.showNextParamAsNewMessage(ctx, upd, session, userID) {
 		m.saveFromSessionText(ctx, upd, session, userID)
-		return
 	}
-
-	// Показываем следующий шаг — отправляем новое сообщение с кнопками
-	m.showNextParamAsNewMessage(ctx, upd, session, userID)
 }
 
 // handleRemainingParamsText обрабатывает ввод параметра текстом в контексте ожидания кнопки
@@ -1445,14 +1440,10 @@ func (m *MessageHandler) handleRemainingParamsText(ctx context.Context, upd tgbo
 
 	m.sessions.Set(userID, session)
 
-	// Проверяем, всё ли заполнено
-	category := session.Exercise.Category()
-	if err := category.ValidateParams(&session.Params); err == nil {
+	// Показываем следующий шаг или сохраняем, если все параметры заполнены
+	if !m.showNextParamAsNewMessage(ctx, upd, session, userID) {
 		m.saveFromSessionText(ctx, upd, session, userID)
-		return nil
 	}
-
-	m.showNextParamAsNewMessage(ctx, upd, session, userID)
 
 	return nil
 }
@@ -1479,12 +1470,24 @@ func (m *MessageHandler) saveFromSessionText(ctx context.Context, upd tgbotapi.U
 	m.sessions.Delete(userID)
 }
 
-// showNextParamAsNewMessage показывает следующий необходимый параметр в виде нового сообщения с кнопками
-func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) {
-	category := session.Exercise.Category()
-	required := category.RequiredParams()
+// showNextParamAsNewMessage показывает следующий необходимый параметр (required, soft-required, optional)
+// в виде нового сообщения с кнопками. Возвращает true, если показал шаг; false — если все параметры заполнены.
+func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) bool {
+	if m.showNextRequiredParamMsg(ctx, upd, session, userID) {
+		return true
+	}
+	if m.showNextSoftRequiredParamMsg(upd, session, userID) {
+		return true
+	}
+	if m.showNextOptionalParamMsg(ctx, upd, session, userID) {
+		return true
+	}
+	return false
+}
 
-	for _, rp := range required {
+// showNextRequiredParamMsg показывает следующий незаполненный обязательный параметр. Возвращает true, если показал.
+func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) bool {
+	for _, rp := range session.Exercise.Category().RequiredParams() {
 		switch rp {
 		case ParamWeight:
 			if session.Params.WeightKg == nil {
@@ -1497,7 +1500,7 @@ func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbo
 				msgID := m.sendMsgWithKeyboard(upd, text, kb)
 				session.LastBotMessageID = msgID
 				m.sessions.Set(userID, session)
-				return
+				return true
 			}
 		case ParamCount:
 			if session.Params.Count == nil {
@@ -1509,7 +1512,7 @@ func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbo
 				msgID := m.sendMsgWithKeyboard(upd, text, kb)
 				session.LastBotMessageID = msgID
 				m.sessions.Set(userID, session)
-				return
+				return true
 			}
 		case ParamDistance:
 			if session.Params.DistanceM == nil {
@@ -1521,7 +1524,7 @@ func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbo
 				msgID := m.sendMsgWithKeyboard(upd, text, kb)
 				session.LastBotMessageID = msgID
 				m.sessions.Set(userID, session)
-				return
+				return true
 			}
 		case ParamDuration:
 			if session.Params.DurationSec == nil {
@@ -1534,10 +1537,107 @@ func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbo
 				msgID := m.sendMsgWithKeyboard(upd, text, kb)
 				session.LastBotMessageID = msgID
 				m.sessions.Set(userID, session)
-				return
+				return true
 			}
 		}
 	}
+	return false
+}
+
+// showNextSoftRequiredParamMsg показывает следующий незаполненный soft-required параметр с кнопкой «Пропустить».
+// Возвращает true, если показал.
+func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, session *UserSession, userID string) bool {
+	for _, sp := range session.Exercise.Category().SoftRequiredParams() {
+		if session.isParamSkipped(sp) {
+			continue
+		}
+		switch sp {
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				session.State = StateAwaitDistance
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+				kb := optionalDistanceInlineKeyboard(session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return true
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				session.State = StateAwaitDuration
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				cat := session.Exercise.Category()
+				var text string
+				var kb tgbotapi.InlineKeyboardMarkup
+				if session.Params.DistanceM != nil {
+					text = fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+					kb = optionalDurationInlineKeyboard(cat, session.Lang)
+				} else {
+					text = fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName)
+					kb = durationInlineKeyboard(cat, session.Lang)
+				}
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// showNextOptionalParamMsg показывает следующий незаполненный optional параметр с кнопкой «Пропустить».
+// Возвращает true, если показал.
+func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string) bool {
+	for _, op := range session.Exercise.OptionalParams() {
+		if session.isParamSkipped(op) {
+			continue
+		}
+		switch op {
+		case ParamWeight:
+			if session.Params.WeightKg == nil {
+				session.State = StateAwaitWeight
+				m.sessions.Set(userID, session)
+				weights, _ := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+				kb := optionalWeightInlineKeyboard(weights, session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return true
+			}
+		case ParamDistance:
+			if session.Params.DistanceM == nil {
+				session.State = StateAwaitDistance
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+				kb := optionalDistanceInlineKeyboard(session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return true
+			}
+		case ParamDuration:
+			if session.Params.DurationSec == nil {
+				session.State = StateAwaitDuration
+				m.sessions.Set(userID, session)
+				exName := exTextByLang[session.Lang][session.Exercise]
+				cat := session.Exercise.Category()
+				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
+				kb := optionalDurationInlineKeyboard(cat, session.Lang)
+				msgID := m.sendMsgWithKeyboard(upd, text, kb)
+				session.LastBotMessageID = msgID
+				m.sessions.Set(userID, session)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sendMsgWithKeyboard отправляет сообщение с inline-кнопками и возвращает ID отправленного сообщения
