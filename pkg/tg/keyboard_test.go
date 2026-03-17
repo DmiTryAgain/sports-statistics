@@ -26,8 +26,8 @@ func TestExerciseInlineKeyboard_FirstPage(t *testing.T) {
 
 	// Проверяем, что первая кнопка — подтягивания
 	firstBtn := kb.InlineKeyboard[0][0]
-	if *firstBtn.CallbackData != "ex|pullUp" {
-		t.Errorf("expected first button callback ex|pullUp, got %s", *firstBtn.CallbackData)
+	if *firstBtn.CallbackData != "ex|jogging" {
+		t.Errorf("expected first button callback ex|jogging, got %s", *firstBtn.CallbackData)
 	}
 
 	// Должна быть кнопка "Ещё >>" (pg|1|add)
