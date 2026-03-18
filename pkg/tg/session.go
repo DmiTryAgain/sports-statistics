@@ -29,6 +29,22 @@ const (
 	StateShowAwaitPeriod   // Ожидание выбора периода
 )
 
+// ParamType возвращает тип параметра, соответствующий состоянию ожидания ввода
+func (s SessionState) ParamType() (ParamType, bool) {
+	switch s {
+	case StateAwaitWeight:
+		return ParamWeight, true
+	case StateAwaitCount:
+		return ParamCount, true
+	case StateAwaitDistance:
+		return ParamDistance, true
+	case StateAwaitDuration:
+		return ParamDuration, true
+	default:
+		return 0, false
+	}
+}
+
 // CustomValueTarget указывает, для какого параметра ожидается произвольный ввод
 type CustomValueTarget int
 

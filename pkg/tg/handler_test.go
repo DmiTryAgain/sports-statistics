@@ -316,24 +316,24 @@ func TestParseValueWithUnit(t *testing.T) {
 		wantErr   bool
 	}{
 		{"weight kg ru", "80кг", langRU, 80, ParamWeight, true, false},
-		{"weight g ru", "500г", langRU, 500, ParamWeight, true, false},
-		{"distance km ru", "5км", langRU, 5, ParamDistance, true, false},
-		{"distance km float ru", "5.5км", langRU, 5.5, ParamDistance, true, false},
-		{"duration min ru", "30мин", langRU, 30, ParamDuration, true, false},
+		{"weight g ru", "500г", langRU, 0.5, ParamWeight, true, false},
+		{"distance km ru", "5км", langRU, 5000, ParamDistance, true, false},
+		{"distance km float ru", "5.5км", langRU, 5500, ParamDistance, true, false},
+		{"duration min ru", "30мин", langRU, 1800, ParamDuration, true, false},
 		{"duration sec ru", "90сек", langRU, 90, ParamDuration, true, false},
 		{"count explicit ru", "10раз", langRU, 10, ParamCount, true, false},
 		{"bare number ru", "10", langRU, 10, 0, false, false},
 		{"bare float ru", "5.5", langRU, 5.5, 0, false, false},
 		{"weight kg en", "80kg", langEN, 80, ParamWeight, true, false},
-		{"weight lbs en", "150lbs", langEN, 150, ParamWeight, true, false},
-		{"distance km en", "5km", langEN, 5, ParamDistance, true, false},
-		{"duration min en", "30min", langEN, 30, ParamDuration, true, false},
+		{"weight lbs en", "150lbs", langEN, 150 * 0.453592, ParamWeight, true, false},
+		{"distance km en", "5km", langEN, 5000, ParamDistance, true, false},
+		{"duration min en", "30min", langEN, 1800, ParamDuration, true, false},
 		{"not a number", "abc", langRU, 0, 0, false, true},
 		{"unknown suffix", "80xyz", langRU, 0, 0, false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, unit, hasUnit, err := parseValueWithUnit(tt.word, tt.lang)
+			pv, err := parseValueWithUnit(tt.word, tt.lang)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseValueWithUnit() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -341,14 +341,14 @@ func TestParseValueWithUnit(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			if value != tt.wantValue {
-				t.Errorf("parseValueWithUnit() value = %v, want %v", value, tt.wantValue)
+			if pv.Value != tt.wantValue {
+				t.Errorf("parseValueWithUnit() value = %v, want %v", pv.Value, tt.wantValue)
 			}
-			if hasUnit != tt.wantHas {
-				t.Errorf("parseValueWithUnit() hasUnit = %v, want %v", hasUnit, tt.wantHas)
+			if pv.HasUnit() != tt.wantHas {
+				t.Errorf("parseValueWithUnit() hasUnit = %v, want %v", pv.HasUnit(), tt.wantHas)
 			}
-			if hasUnit && unit.ParamType != tt.wantType {
-				t.Errorf("parseValueWithUnit() paramType = %v, want %v", unit.ParamType, tt.wantType)
+			if pv.HasUnit() && pv.Unit.ParamType != tt.wantType {
+				t.Errorf("parseValueWithUnit() paramType = %v, want %v", pv.Unit.ParamType, tt.wantType)
 			}
 		})
 	}

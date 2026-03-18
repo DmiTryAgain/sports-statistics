@@ -235,32 +235,32 @@ func (m *MessageHandler) detectCmd(rawMsg string, lang language) (cleaned string
 // parseValueWithUnit пытается извлечь числовое значение и единицу измерения из слова.
 // Поддерживает форматы: "80кг" (слитно).
 // Если слово — только число без суффикса, возвращает значение с hasUnit=false.
-func parseValueWithUnit(word string, lang language) (value float64, unit UnitDef, hasUnit bool, err error) {
+func parseValueWithUnit(word string, lang language) (ParsedValue, error) {
 	// Пробуем слитный формат: число + суффикс
 	if matches := valueUnitRe.FindStringSubmatch(word); len(matches) == 3 {
 		numStr := strings.ReplaceAll(matches[1], ",", ".")
-		value, err = strconv.ParseFloat(numStr, 64)
+		v, err := strconv.ParseFloat(numStr, 64)
 		if err != nil {
-			return 0, UnitDef{}, false, fmt.Errorf("parse number %q: %w", matches[1], err)
+			return ParsedValue{}, fmt.Errorf("parse number %q: %w", matches[1], err)
 		}
 		suffix := strings.ToLower(matches[2])
 		if u, ok := unitSuffixByLang[lang][suffix]; ok {
-			return value, u, true, nil
+			return ParsedValue{Value: v * u.Multiplier, Unit: &u}, nil
 		}
-		return 0, UnitDef{}, false, fmt.Errorf("unknown unit suffix %q", suffix)
+		return ParsedValue{}, fmt.Errorf("unknown unit suffix %q", suffix)
 	}
 
 	// Пробуем голое число
 	if matches := justNumberRe.FindStringSubmatch(word); len(matches) == 2 {
 		numStr := strings.ReplaceAll(matches[1], ",", ".")
-		value, err = strconv.ParseFloat(numStr, 64)
+		v, err := strconv.ParseFloat(numStr, 64)
 		if err != nil {
-			return 0, UnitDef{}, false, fmt.Errorf("parse number %q: %w", matches[1], err)
+			return ParsedValue{}, fmt.Errorf("parse number %q: %w", matches[1], err)
 		}
-		return value, UnitDef{}, false, nil
+		return ParsedValue{Value: v}, nil
 	}
 
-	return 0, UnitDef{}, false, fmt.Errorf("can't parse %q as value", word)
+	return ParsedValue{}, fmt.Errorf("can't parse %q as value", word)
 }
 
 var (
@@ -272,32 +272,12 @@ var (
 )
 
 func (pp *ParsedParams) addParam(pt ParamType, val float64) {
-	switch pt {
-	case ParamCount:
-		if pp.Count == nil {
-			pp.Count = ptr(val)
-		} else {
-			*pp.Count += val
-		}
-	case ParamWeight:
-		if pp.WeightKg == nil {
-			pp.WeightKg = ptr(val)
-		} else {
-			*pp.WeightKg += val
-		}
-	case ParamDistance:
-		if pp.DistanceM == nil {
-			pp.DistanceM = ptr(val)
-		} else {
-			*pp.DistanceM += val
-		}
-	case ParamDuration:
-		if pp.DurationSec == nil {
-			pp.DurationSec = ptr(val)
-		} else {
-			*pp.DurationSec += val
-		}
+	if cur := pp.GetParam(pt); cur != nil {
+		pp.SetParam(pt, *cur+val)
+		return
 	}
+
+	pp.SetParam(pt, val)
 }
 
 // parseExerciseParams парсит слова после упражнения, извлекая параметры в соответствии с категорией.
@@ -305,13 +285,13 @@ func parseExerciseParams(words []string, category ExerciseCategory, lang languag
 	var pp ParsedParams
 
 	for i := 0; i < len(words); i++ {
-		value, unit, hasUnit, err := parseValueWithUnit(words[i], lang)
+		pv, err := parseValueWithUnit(words[i], lang)
 		if err != nil {
 			continue
 		}
 
-		if hasUnit {
-			pp.addParam(unit.ParamType, value*unit.Multiplier)
+		if pv.HasUnit() {
+			pp.addParam(pv.Unit.ParamType, pv.Value)
 			continue
 		}
 
@@ -319,14 +299,14 @@ func parseExerciseParams(words []string, category ExerciseCategory, lang languag
 		if i+1 < len(words) {
 			nextWord := strings.ToLower(words[i+1])
 			if u, ok := unitSuffixByLang[lang][nextWord]; ok {
-				pp.addParam(u.ParamType, value*u.Multiplier)
+				pp.addParam(u.ParamType, pv.Value*u.Multiplier)
 				i++
 				continue
 			}
 		}
 
 		// Голое число без суффикса → count
-		pp.addParam(ParamCount, value)
+		pp.addParam(ParamCount, pv.Value)
 	}
 
 	if err := category.ValidateParams(&pp); err != nil {
@@ -1385,27 +1365,17 @@ func (m *MessageHandler) handleSessionText(ctx context.Context, upd tgbotapi.Upd
 
 // handleCustomValueInput обрабатывает ручной ввод значения для кнопки "Другой"
 func (m *MessageHandler) handleCustomValueInput(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID, text string) {
-	value, unit, hasUnit, err := parseValueWithUnit(text, session.Lang)
+	pv, err := parseValueWithUnit(text, session.Lang)
 	if err != nil {
 		m.sendMsg(upd, fmt.Sprintf(messagesByLang[session.Lang][paramInvalid], text))
 		return
 	}
 
-	if hasUnit {
-		// Единица измерения распознана — применяем множитель и записываем по типу параметра
-		session.Params.addParam(unit.ParamType, value*unit.Multiplier)
+	if pv.HasUnit() {
+		session.Params.addParam(pv.Unit.ParamType, pv.Value)
 	} else {
 		// Голое число — записываем в параметр, соответствующий текущему CustomTarget
-		switch session.CustomTarget {
-		case TargetWeight:
-			session.Params.WeightKg = ptr(value)
-		case TargetCount:
-			session.Params.Count = ptr(value)
-		case TargetDistance:
-			session.Params.DistanceM = ptr(value)
-		case TargetDuration:
-			session.Params.DurationSec = ptr(value)
-		}
+		session.Params.SetParam(customTargetToParamType(session.CustomTarget), pv.Value)
 	}
 
 	m.sessions.Set(userID, session)
@@ -1419,7 +1389,7 @@ func (m *MessageHandler) handleCustomValueInput(ctx context.Context, upd tgbotap
 
 // handleRemainingParamsText обрабатывает ввод параметра текстом в контексте ожидания кнопки
 func (m *MessageHandler) handleRemainingParamsText(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID, text string) error {
-	value, unit, hasUnit, err := parseValueWithUnit(text, session.Lang)
+	pv, err := parseValueWithUnit(text, session.Lang)
 	if err != nil {
 		m.sendMsg(upd, fmt.Sprintf(messagesByLang[session.Lang][paramInvalid], text))
 		// Игнорируем эту ошибку, просто отправим пользователю, что некорректные единицы измерения
@@ -1427,22 +1397,16 @@ func (m *MessageHandler) handleRemainingParamsText(ctx context.Context, upd tgbo
 		return nil
 	}
 
-	if hasUnit {
-		session.Params.addParam(unit.ParamType, value*unit.Multiplier)
+	if pv.HasUnit() {
+		session.Params.addParam(pv.Unit.ParamType, pv.Value)
 	} else {
 		// Голое число — применяем в зависимости от текущего состояния
-		switch session.State {
-		case StateAwaitWeight:
-			session.Params.WeightKg = ptr(value)
-		case StateAwaitCount:
-			session.Params.Count = ptr(value)
-		case StateAwaitDistance:
-			session.Params.DistanceM = ptr(value)
-		case StateAwaitDuration:
-			session.Params.DurationSec = ptr(value)
-		default:
+		pt, ok := session.State.ParamType()
+		if !ok {
 			return fmt.Errorf("unknown state: %d", session.State)
 		}
+
+		session.Params.SetParam(pt, pv.Value)
 	}
 
 	m.sessions.Set(userID, session)

@@ -53,23 +53,8 @@ func (c ExerciseCategory) SoftRequiredParams() []ParamType {
 func (c ExerciseCategory) ValidateParams(pp *ParsedParams) error {
 	// Проверяем безусловно обязательные
 	for _, rp := range c.RequiredParams() {
-		switch rp {
-		case ParamCount:
-			if pp.Count == nil {
-				return errCountRequired
-			}
-		case ParamWeight:
-			if pp.WeightKg == nil {
-				return errWeightRequired
-			}
-		case ParamDistance:
-			if pp.DistanceM == nil {
-				return errDistanceRequired
-			}
-		case ParamDuration:
-			if pp.DurationSec == nil {
-				return errDurationRequired
-			}
+		if pp.GetParam(rp) == nil {
+			return rp.requiredError()
 		}
 	}
 
@@ -78,15 +63,8 @@ func (c ExerciseCategory) ValidateParams(pp *ParsedParams) error {
 	if len(soft) > 0 {
 		hasSome := false
 		for _, sp := range soft {
-			switch sp {
-			case ParamDistance:
-				if pp.DistanceM != nil {
-					hasSome = true
-				}
-			case ParamDuration:
-				if pp.DurationSec != nil {
-					hasSome = true
-				}
+			if pp.GetParam(sp) != nil {
+				hasSome = true
 			}
 		}
 		if !hasSome {
@@ -107,10 +85,36 @@ const (
 	ParamDuration                  // длительность: ч, мин, сек
 )
 
+// requiredError возвращает ошибку "параметр обязателен" для данного типа
+func (pt ParamType) requiredError() error {
+	switch pt {
+	case ParamCount:
+		return errCountRequired
+	case ParamWeight:
+		return errWeightRequired
+	case ParamDistance:
+		return errDistanceRequired
+	case ParamDuration:
+		return errDurationRequired
+	}
+	return nil
+}
+
 // UnitDef описывает единицу измерения и коэффициент нормализации к базовой единице
 type UnitDef struct {
 	ParamType  ParamType
 	Multiplier float64
+}
+
+// ParsedValue — результат парсинга числа с опциональной единицей измерения.
+type ParsedValue struct {
+	Value float64  // Нормализованное значение (с учётом множителя единицы, если есть)
+	Unit  *UnitDef // nil, если единица не распознана (голое число)
+}
+
+// HasUnit возвращает true, если единица измерения была распознана.
+func (p ParsedValue) HasUnit() bool {
+	return p.Unit != nil
 }
 
 // ParsedParams — результат парсинга текстовых параметров упражнения
@@ -119,6 +123,35 @@ type ParsedParams struct {
 	WeightKg    *float64 // вес в кг (нормализован)
 	DistanceM   *float64 // дистанция в метрах (нормализована)
 	DurationSec *float64 // длительность в секундах (нормализована)
+}
+
+// GetParam возвращает указатель на значение параметра по типу
+func (pp *ParsedParams) GetParam(pt ParamType) *float64 {
+	switch pt {
+	case ParamWeight:
+		return pp.WeightKg
+	case ParamCount:
+		return pp.Count
+	case ParamDistance:
+		return pp.DistanceM
+	case ParamDuration:
+		return pp.DurationSec
+	}
+	return nil
+}
+
+// SetParam устанавливает значение параметра по типу
+func (pp *ParsedParams) SetParam(pt ParamType, val float64) {
+	switch pt {
+	case ParamWeight:
+		pp.WeightKg = ptr(val)
+	case ParamCount:
+		pp.Count = ptr(val)
+	case ParamDistance:
+		pp.DistanceM = ptr(val)
+	case ParamDuration:
+		pp.DurationSec = ptr(val)
+	}
 }
 
 func (pp *ParsedParams) String() string {

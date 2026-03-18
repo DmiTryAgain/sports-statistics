@@ -1545,32 +1545,166 @@ var exerciseOptionalParamsMap = map[Exercise][]ParamType{
 
 var unitSuffixByLang = map[language]map[string]UnitDef{
 	langRU: {
-		"кг":  {ParamType: ParamWeight, Multiplier: 1},
-		"г":   {ParamType: ParamWeight, Multiplier: 0.001},
-		"км":  {ParamType: ParamDistance, Multiplier: 1000},
-		"м":   {ParamType: ParamDistance, Multiplier: 1},
-		"ч":   {ParamType: ParamDuration, Multiplier: 3600},
-		"мин": {ParamType: ParamDuration, Multiplier: 60},
-		"сек": {ParamType: ParamDuration, Multiplier: 1},
-		"с":   {ParamType: ParamDuration, Multiplier: 1},
-		"раз": {ParamType: ParamCount, Multiplier: 1},
-		"р":   {ParamType: ParamCount, Multiplier: 1},
+		// Вес — килограммы
+		"кг":          {ParamType: ParamWeight, Multiplier: 1},
+		"кило":        {ParamType: ParamWeight, Multiplier: 1},
+		"килограмм":   {ParamType: ParamWeight, Multiplier: 1},
+		"килограмма":  {ParamType: ParamWeight, Multiplier: 1},
+		"килограммов": {ParamType: ParamWeight, Multiplier: 1},
+		"килограм":    {ParamType: ParamWeight, Multiplier: 1},
+		"килограма":   {ParamType: ParamWeight, Multiplier: 1},
+		"килограмов":  {ParamType: ParamWeight, Multiplier: 1},
+
+		// Вес — граммы
+		"г":       {ParamType: ParamWeight, Multiplier: 0.001},
+		"гр":      {ParamType: ParamWeight, Multiplier: 0.001},
+		"грамм":   {ParamType: ParamWeight, Multiplier: 0.001},
+		"грамма":  {ParamType: ParamWeight, Multiplier: 0.001},
+		"граммов": {ParamType: ParamWeight, Multiplier: 0.001},
+		"грам":    {ParamType: ParamWeight, Multiplier: 0.001},
+		"грама":   {ParamType: ParamWeight, Multiplier: 0.001},
+		"грамов":  {ParamType: ParamWeight, Multiplier: 0.001},
+
+		// Дистанция — километры
+		"км":         {ParamType: ParamDistance, Multiplier: 1000},
+		"километр":   {ParamType: ParamDistance, Multiplier: 1000},
+		"километра":  {ParamType: ParamDistance, Multiplier: 1000},
+		"километров": {ParamType: ParamDistance, Multiplier: 1000},
+		"киламетр":   {ParamType: ParamDistance, Multiplier: 1000},
+		"киламетра":  {ParamType: ParamDistance, Multiplier: 1000},
+		"киламетров": {ParamType: ParamDistance, Multiplier: 1000},
+		"келометр":   {ParamType: ParamDistance, Multiplier: 1000},
+		"келометра":  {ParamType: ParamDistance, Multiplier: 1000},
+		"келометров": {ParamType: ParamDistance, Multiplier: 1000},
+		"келаметр":   {ParamType: ParamDistance, Multiplier: 1000},
+		"келаметра":  {ParamType: ParamDistance, Multiplier: 1000},
+		"келаметров": {ParamType: ParamDistance, Multiplier: 1000},
+
+		// Дистанция — метры
+		"м":      {ParamType: ParamDistance, Multiplier: 1},
+		"метр":   {ParamType: ParamDistance, Multiplier: 1},
+		"метра":  {ParamType: ParamDistance, Multiplier: 1},
+		"метров": {ParamType: ParamDistance, Multiplier: 1},
+
+		// Время — часы
+		"ч":     {ParamType: ParamDuration, Multiplier: 3600},
+		"час":   {ParamType: ParamDuration, Multiplier: 3600},
+		"часа":  {ParamType: ParamDuration, Multiplier: 3600},
+		"часов": {ParamType: ParamDuration, Multiplier: 3600},
+		"чиса":  {ParamType: ParamDuration, Multiplier: 3600},
+		"чисов": {ParamType: ParamDuration, Multiplier: 3600},
+		"чеса":  {ParamType: ParamDuration, Multiplier: 3600},
+		"чесов": {ParamType: ParamDuration, Multiplier: 3600},
+
+		// Время — минуты
+		"мин":    {ParamType: ParamDuration, Multiplier: 60},
+		"минут":  {ParamType: ParamDuration, Multiplier: 60},
+		"минута": {ParamType: ParamDuration, Multiplier: 60},
+		"минуты": {ParamType: ParamDuration, Multiplier: 60},
+		"минуту": {ParamType: ParamDuration, Multiplier: 60},
+
+		// Время — секунды
+		"сек":     {ParamType: ParamDuration, Multiplier: 1},
+		"с":       {ParamType: ParamDuration, Multiplier: 1},
+		"секунд":  {ParamType: ParamDuration, Multiplier: 1},
+		"секунда": {ParamType: ParamDuration, Multiplier: 1},
+		"секунды": {ParamType: ParamDuration, Multiplier: 1},
+		"секунду": {ParamType: ParamDuration, Multiplier: 1},
+		"сикунд":  {ParamType: ParamDuration, Multiplier: 1},
+		"сикунда": {ParamType: ParamDuration, Multiplier: 1},
+		"сикунды": {ParamType: ParamDuration, Multiplier: 1},
+		"сикунду": {ParamType: ParamDuration, Multiplier: 1},
+
+		// Повторения
+		"раз":        {ParamType: ParamCount, Multiplier: 1},
+		"р":          {ParamType: ParamCount, Multiplier: 1},
+		"повтор":     {ParamType: ParamCount, Multiplier: 1},
+		"повтора":    {ParamType: ParamCount, Multiplier: 1},
+		"повторов":   {ParamType: ParamCount, Multiplier: 1},
+		"повторение": {ParamType: ParamCount, Multiplier: 1},
+		"повторения": {ParamType: ParamCount, Multiplier: 1},
+		"повторений": {ParamType: ParamCount, Multiplier: 1},
 	},
 	langEN: {
-		"kg":   {ParamType: ParamWeight, Multiplier: 1},
-		"lbs":  {ParamType: ParamWeight, Multiplier: 0.453592},
-		"lb":   {ParamType: ParamWeight, Multiplier: 0.453592},
-		"g":    {ParamType: ParamWeight, Multiplier: 0.001},
-		"km":   {ParamType: ParamDistance, Multiplier: 1000},
-		"m":    {ParamType: ParamDistance, Multiplier: 1},
-		"mi":   {ParamType: ParamDistance, Multiplier: 1609.34},
-		"h":    {ParamType: ParamDuration, Multiplier: 3600},
-		"hr":   {ParamType: ParamDuration, Multiplier: 3600},
-		"min":  {ParamType: ParamDuration, Multiplier: 60},
-		"sec":  {ParamType: ParamDuration, Multiplier: 1},
-		"s":    {ParamType: ParamDuration, Multiplier: 1},
-		"reps": {ParamType: ParamCount, Multiplier: 1},
-		"rep":  {ParamType: ParamCount, Multiplier: 1},
-		"x":    {ParamType: ParamCount, Multiplier: 1},
+		// Weight — kilograms
+		"kg":          {ParamType: ParamWeight, Multiplier: 1},
+		"kgs":         {ParamType: ParamWeight, Multiplier: 1},
+		"kilo":        {ParamType: ParamWeight, Multiplier: 1},
+		"kilos":       {ParamType: ParamWeight, Multiplier: 1},
+		"kilogram":    {ParamType: ParamWeight, Multiplier: 1},
+		"kilograms":   {ParamType: ParamWeight, Multiplier: 1},
+		"kilogramme":  {ParamType: ParamWeight, Multiplier: 1},
+		"killo":       {ParamType: ParamWeight, Multiplier: 1},
+		"killos":      {ParamType: ParamWeight, Multiplier: 1},
+		"killogram":   {ParamType: ParamWeight, Multiplier: 1},
+		"killograms":  {ParamType: ParamWeight, Multiplier: 1},
+		"killogramme": {ParamType: ParamWeight, Multiplier: 1},
+
+		// Weight — pounds
+		"lbs":    {ParamType: ParamWeight, Multiplier: 0.453592},
+		"lb":     {ParamType: ParamWeight, Multiplier: 0.453592},
+		"pound":  {ParamType: ParamWeight, Multiplier: 0.453592},
+		"pounds": {ParamType: ParamWeight, Multiplier: 0.453592},
+
+		// Weight — grams
+		"g":      {ParamType: ParamWeight, Multiplier: 0.001},
+		"gs":     {ParamType: ParamWeight, Multiplier: 0.001},
+		"gram":   {ParamType: ParamWeight, Multiplier: 0.001},
+		"grams":  {ParamType: ParamWeight, Multiplier: 0.001},
+		"gramm":  {ParamType: ParamWeight, Multiplier: 0.001},
+		"gramms": {ParamType: ParamWeight, Multiplier: 0.001},
+
+		// Distance — kilometers
+		"km":          {ParamType: ParamDistance, Multiplier: 1000},
+		"kms":         {ParamType: ParamDistance, Multiplier: 1000},
+		"kilometer":   {ParamType: ParamDistance, Multiplier: 1000},
+		"kilometers":  {ParamType: ParamDistance, Multiplier: 1000},
+		"kilometre":   {ParamType: ParamDistance, Multiplier: 1000},
+		"kilometres":  {ParamType: ParamDistance, Multiplier: 1000},
+		"killometer":  {ParamType: ParamDistance, Multiplier: 1000},
+		"killometers": {ParamType: ParamDistance, Multiplier: 1000},
+		"killometre":  {ParamType: ParamDistance, Multiplier: 1000},
+		"killometres": {ParamType: ParamDistance, Multiplier: 1000},
+
+		// Distance — meters
+		"m":      {ParamType: ParamDistance, Multiplier: 1},
+		"meter":  {ParamType: ParamDistance, Multiplier: 1},
+		"meters": {ParamType: ParamDistance, Multiplier: 1},
+		"metre":  {ParamType: ParamDistance, Multiplier: 1},
+		"metres": {ParamType: ParamDistance, Multiplier: 1},
+
+		// Distance — miles
+		"mi":     {ParamType: ParamDistance, Multiplier: 1609.34},
+		"mile":   {ParamType: ParamDistance, Multiplier: 1609.34},
+		"miles":  {ParamType: ParamDistance, Multiplier: 1609.34},
+		"mille":  {ParamType: ParamDistance, Multiplier: 1609.34},
+		"milles": {ParamType: ParamDistance, Multiplier: 1609.34},
+
+		// Duration — hours
+		"h":     {ParamType: ParamDuration, Multiplier: 3600},
+		"hr":    {ParamType: ParamDuration, Multiplier: 3600},
+		"hrs":   {ParamType: ParamDuration, Multiplier: 3600},
+		"hour":  {ParamType: ParamDuration, Multiplier: 3600},
+		"hours": {ParamType: ParamDuration, Multiplier: 3600},
+
+		// Duration — minutes
+		"min":     {ParamType: ParamDuration, Multiplier: 60},
+		"mins":    {ParamType: ParamDuration, Multiplier: 60},
+		"minute":  {ParamType: ParamDuration, Multiplier: 60},
+		"minutes": {ParamType: ParamDuration, Multiplier: 60},
+
+		// Duration — seconds
+		"sec":     {ParamType: ParamDuration, Multiplier: 1},
+		"secs":    {ParamType: ParamDuration, Multiplier: 1},
+		"s":       {ParamType: ParamDuration, Multiplier: 1},
+		"second":  {ParamType: ParamDuration, Multiplier: 1},
+		"seconds": {ParamType: ParamDuration, Multiplier: 1},
+
+		// Reps
+		"reps":  {ParamType: ParamCount, Multiplier: 1},
+		"rep":   {ParamType: ParamCount, Multiplier: 1},
+		"x":     {ParamType: ParamCount, Multiplier: 1},
+		"time":  {ParamType: ParamCount, Multiplier: 1},
+		"times": {ParamType: ParamCount, Multiplier: 1},
 	},
 }
