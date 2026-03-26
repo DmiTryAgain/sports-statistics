@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS "statistics" CASCADE;
 
 CREATE TABLE "statistics" (
-    "statisticId" int4 NOT NULL,
+    "statisticId" SERIAL NOT NULL,
     "tgUserId" varchar(255) NOT NULL,
     "exercise" varchar(255) NOT NULL,
     "count" float8 NOT NULL,

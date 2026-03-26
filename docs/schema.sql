@@ -1,13 +1,13 @@
 ﻿-- =============================================================================
 -- Diagram Name: sportStatistics
--- Created on: 3/26/2026 11:54:41 PM
+-- Created on: 3/27/2026 12:10:07 AM
 -- Diagram Version: 
 -- =============================================================================
 
 DROP TABLE IF EXISTS "statistics" CASCADE;
 
 CREATE TABLE "statistics" (
-	"statisticId" int4 NOT NULL,
+	"statisticId" SERIAL NOT NULL,
 	"tgUserId" varchar(255) NOT NULL,
 	"exercise" varchar(255) NOT NULL,
 	"count" float8 NOT NULL,
