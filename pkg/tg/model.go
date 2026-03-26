@@ -239,6 +239,9 @@ type Exercises []Exercise
 func (e Exercises) String() string {
 	b := new(strings.Builder)
 	for i := range e {
+		if i > 0 {
+			b.WriteString(", ")
+		}
 		b.WriteString("exercise: ")
 		b.WriteString(e[i].String())
 	}
@@ -349,7 +352,7 @@ func anyHasDistance(stats []GroupedStatistic) bool {
 
 func anyHasDuration(stats []GroupedStatistic) bool {
 	for _, s := range stats {
-		if s.SumDurationSec != nil {
+		if s.DurationSec != nil {
 			return true
 		}
 	}
@@ -404,8 +407,15 @@ func formatDuration(sec float64, lang language) string {
 	}
 	hours := totalSec / 3600
 	remMin := (totalSec % 3600) / 60
-	if remMin == 0 {
+	remSec := totalSec % 60
+	switch {
+	case remMin == 0 && remSec == 0:
 		return fmt.Sprintf("%d%s", hours, suffixH)
+	case remSec == 0:
+		return fmt.Sprintf("%d%s %d%s", hours, suffixH, remMin, suffixMin)
+	case remMin == 0:
+		return fmt.Sprintf("%d%s %d%s", hours, suffixH, remSec, suffixSec)
+	default:
+		return fmt.Sprintf("%d%s %d%s %d%s", hours, suffixH, remMin, suffixMin, remSec, suffixSec)
 	}
-	return fmt.Sprintf("%d%s %d%s", hours, suffixH, remMin, suffixMin)
 }

@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	fs           = flag.NewFlagSetWithEnvPrefix(os.Args[0], "SELLERSRV", 0)
+	fs           = flag.NewFlagSetWithEnvPrefix(os.Args[0], "SPORTSTAT", 0)
 	flConfigPath = fs.String("config", "config/local.toml", "Path to config file")
 	flVerbose    = fs.Bool("verbose", false, "enable debug output")
 	flJSONLogs   = fs.Bool("json", false, "enable json output")

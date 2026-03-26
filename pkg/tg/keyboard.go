@@ -317,7 +317,40 @@ func formatAddConfirmation(ex Exercise, cnt float64, params *db.StatisticParams,
 		}
 	}
 
-	return fmt.Sprintf(messagesByLang[lang][addedConfirmation], name, detail)
+	confirm := fmt.Sprintf(messagesByLang[lang][addedConfirmation], name, detail)
+	quickCmd := formatQuickCopyCommand(ex, cnt, params, lang)
+	return confirm + "\n" + fmt.Sprintf(messagesByLang[lang][quickCopyHint], "`"+quickCmd+"`")
+}
+
+// formatQuickCopyCommand формирует текстовую команду для быстрого копирования.
+// Результат можно вставить в чат и отправить — парсер распознает его корректно.
+func formatQuickCopyCommand(ex Exercise, cnt float64, params *db.StatisticParams, lang language) string {
+	cmdWord := cmdTextByLang[lang][addCmd]
+	exName := exTextByLang[lang][ex]
+	if exName == "" {
+		exName = ex.String()
+	}
+
+	parts := []string{cmdWord, exName}
+
+	if params != nil && params.WeightKg != nil {
+		parts = append(parts, formatWeight(*params.WeightKg, lang))
+	}
+
+	cat := ex.Category()
+	switch cat {
+	case CategoryReps, CategoryRepsWeight:
+		parts = append(parts, strconv.FormatFloat(cnt, 'f', -1, 64))
+	}
+
+	if params != nil && params.DistanceM != nil {
+		parts = append(parts, formatDistance(*params.DistanceM, lang))
+	}
+	if params != nil && params.DurationSec != nil {
+		parts = append(parts, formatDuration(*params.DurationSec, lang))
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func cancelRow(lang language) []tgbotapi.InlineKeyboardButton {

@@ -16,6 +16,8 @@ import (
 	"github.com/vmkteam/embedlog"
 )
 
+const maxMessageLen = 500
+
 var (
 	errCantDetectLang  = errors.New("can't detect language")
 	errCantRecognizeEx = errors.New("can't recognize the exercise")
@@ -26,26 +28,37 @@ var (
 	ruLangRe     = regexp.MustCompile(`^[а-яА-ЯёЁ0-9\s.,!?'"@#$%^&*()\-_=+;:<>/\\|}{\[\]\p{So}]*$`)
 	valueUnitRe  = regexp.MustCompile(`^(\d+[.,]?\d*)\s*([a-zA-Zа-яА-ЯёЁ]+)$`)
 	justNumberRe = regexp.MustCompile(`^(\d+[.,]?\d*)$`)
+
+	reHyphen   = regexp.MustCompile(`(\d)\s*-\s*(\d)`)
+	reDateDot  = regexp.MustCompile(`(\d{2})\.(\d{2})\.(\d{2}|\d{4})`)
+	reFloatDot = regexp.MustCompile(`(\d)\.(\d)`)
+	rePunct    = regexp.MustCompile(`[[:punct:]]`)
+	reSpaces   = regexp.MustCompile(`\s+`)
+
+	ruLettersOnlyRe = regexp.MustCompile(`^[а-яА-ЯёЁ]+$`)
+	enLettersOnlyRe = regexp.MustCompile(`^[a-zA-Z]+$`)
 )
 
 type MessageHandler struct {
 	embedlog.Logger
 
-	dbc      db.DB
-	statRepo db.StatisticRepo
-	tgBot    *tgbotapi.BotAPI
-	cfg      Bot
-	sessions *SessionStore
+	dbc       db.DB
+	statRepo  db.StatisticRepo
+	tgBot     *tgbotapi.BotAPI
+	cfg       Bot
+	sessions  *SessionStore
+	rateLimit *rateLimiter
 }
 
 func New(shutdownCtx context.Context, logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
 	h := &MessageHandler{
-		Logger:   logger,
-		dbc:      db,
-		cfg:      cfg,
-		tgBot:    tgBot,
-		statRepo: statRepo,
-		sessions: NewSessionStore(shutdownCtx),
+		Logger:    logger,
+		dbc:       db,
+		cfg:       cfg,
+		tgBot:     tgBot,
+		statRepo:  statRepo,
+		sessions:  NewSessionStore(shutdownCtx),
+		rateLimit: newRateLimiter(shutdownCtx),
 	}
 
 	return h
@@ -67,73 +80,97 @@ func (m *MessageHandler) ListenAndHandle(shutdownCtx context.Context) {
 
 		go func() {
 			defer func() { <-limit }() // Освобождаем канал после успешного завершения горутины
-
-			ctx := context.Background()
-
-			// Обработка inline-кнопок
-			if upd.CallbackQuery != nil {
-				m.handleCallback(ctx, upd)
-				return
-			}
-
-			if upd.Message == nil {
-				return
-			}
-
-			// Обработка /start
-			if upd.Message.IsCommand() && upd.Message.Command() == "start" {
-				m.handleStart(ctx, upd)
-				return
-			}
-
-			lowerText := strings.ToLower(upd.Message.Text)
-			// Проверяем, что обращались вообще к нам
-			hasMention := m.hasBotMention(lowerText)
-			if !hasMention && upd.FromChat().IsGroup() {
-				return // Скипаем, если к нам не обращались или не писали нам в личку
-			}
-
-			// Достаём пользователя
-			userID := strconv.FormatInt(upd.Message.From.ID, 10)
-
-			// Проверяем, не нажал ли пользователь ReplyKeyboard кнопку
-			if c, lang, ok := m.detectReplyButton(upd.Message.Text); ok {
-				m.handleReplyButton(ctx, upd, userID, lang, c)
-				return
-			}
-
-			// Чистим текст от мусора
-			msgText := m.clearRawMsg(lowerText)
-			// Определяем язык
-			lang, err := m.detectLang(msgText)
-			if err != nil {
-				m.Print(ctx, err.Error(), "msg", msgText, "userID", userID)
-				m.sendMsg(upd, "Can't detect a language😶 Please, use the only one keyboard layout chars")
-				return
-			}
-
-			// Если ничего не осталось, отправляем соответствующий ответ
-			if msgText == "" {
-				m.Print(ctx, "received empty message", "rawMsg", upd.Message.Text, "userID", userID)
-				m.sendMsg(upd, messagesByLang[lang][emptyMessage])
-				return
-			}
-
-			// Проверяем, есть ли активная сессия
-			if session := m.sessions.Get(userID); session != nil && session.State != StateIdle {
-				m.handleSessionText(ctx, upd, session, userID, msgText)
-				return
-			}
-
-			text, err := m.handle(ctx, msgText, userID, lang)
-			if err != nil { // В случае ошибки сообщаем об этом
-				text = messagesByLang[lang][errMsg]
-				m.Error(ctx, "an error occurred", "rawMsg", upd.Message.Text, "userID", userID, "err", err.Error()) // И логируем её
-			}
-
-			m.sendMsg(upd, text)
+			m.handleUpdate(upd)
 		}()
 	}
+}
+
+// handleUpdate обрабатывает один входящий апдейт
+func (m *MessageHandler) handleUpdate(upd tgbotapi.Update) {
+	ctx := context.Background()
+
+	var (
+		rateLimitID  int64
+		fromCallback bool
+	)
+	if upd.Message != nil && upd.Message.From != nil {
+		rateLimitID = upd.Message.From.ID
+	} else if upd.CallbackQuery != nil {
+		rateLimitID = upd.CallbackQuery.From.ID
+		fromCallback = true
+	}
+	if rateLimitID != 0 && !m.rateLimit.Allow(rateLimitID) {
+		m.Print(ctx, "same user exceeds the limit", "userID", rateLimitID, "fromCallback", fromCallback)
+		return
+	}
+
+	// Обработка inline-кнопок
+	if upd.CallbackQuery != nil {
+		m.handleCallback(ctx, upd)
+		return
+	}
+
+	if upd.Message == nil {
+		return
+	}
+
+	// Обработка /start
+	if upd.Message.IsCommand() && upd.Message.Command() == "start" {
+		m.handleStart(ctx, upd)
+		return
+	}
+
+	if len(upd.Message.Text) > maxMessageLen {
+		m.sendMsg(upd, messagesByLang[langRU][msgTooLong])
+		return
+	}
+
+	lowerText := strings.ToLower(upd.Message.Text)
+	// Проверяем, что обращались вообще к нам
+	hasMention := m.hasBotMention(lowerText)
+	if !hasMention && upd.FromChat().IsGroup() {
+		return // Скипаем, если к нам не обращались или не писали нам в личку
+	}
+
+	// Достаём пользователя
+	userID := strconv.FormatInt(upd.Message.From.ID, 10)
+
+	// Проверяем, не нажал ли пользователь ReplyKeyboard кнопку
+	if c, lang, ok := m.detectReplyButton(upd.Message.Text); ok {
+		m.handleReplyButton(ctx, upd, userID, lang, c)
+		return
+	}
+
+	// Чистим текст от мусора
+	msgText := m.clearRawMsg(lowerText)
+	// Определяем язык
+	lang, err := m.detectLang(msgText)
+	if err != nil {
+		m.Print(ctx, err.Error(), "msg", msgText, "userID", userID)
+		m.sendMsg(upd, "Can't detect a language😶 Please, use the only one keyboard layout chars")
+		return
+	}
+
+	// Если ничего не осталось, отправляем соответствующий ответ
+	if msgText == "" {
+		m.Print(ctx, "received empty message", "rawMsg", upd.Message.Text, "userID", userID)
+		m.sendMsg(upd, messagesByLang[lang][emptyMessage])
+		return
+	}
+
+	// Проверяем, есть ли активная сессия
+	if session := m.sessions.Get(userID); session != nil && session.State != StateIdle {
+		m.handleSessionText(ctx, upd, session, userID, msgText)
+		return
+	}
+
+	text, err := m.handle(ctx, msgText, userID, lang)
+	if err != nil { // В случае ошибки сообщаем об этом
+		text = messagesByLang[lang][errMsg]
+		m.Error(ctx, "an error occurred", "rawMsg", upd.Message.Text, "userID", userID, "err", err.Error()) // И логируем её
+	}
+
+	m.sendMsg(upd, text)
 }
 
 // sendMsg Отправляет сообщение
@@ -190,25 +227,20 @@ func (m *MessageHandler) clearRawMsg(rawMsg string) string {
 
 	const dashPlaceHolder = "DASHPLACEHOLDER"
 	// Делаем специальный плейсхолдер с тире, чтобы не удалить лишние тире
-	reHyphen := regexp.MustCompile(`(\d)\s*-\s*(\d)`)
 	withPlaceHoder := reHyphen.ReplaceAllString(withoutMention, fmt.Sprintf("${1}%s${2}", dashPlaceHolder))
 
 	const dotPlaceHolder = "DOTPLACEHOLDER"
 
 	// Protect dots in dates (mark them temporary)
-	reDateDot := regexp.MustCompile(`(\d{2})\.(\d{2})\.(\d{2}|\d{4})`)
 	withPlaceHoder = reDateDot.ReplaceAllString(withPlaceHoder, fmt.Sprintf("${1}%s${2}%s${3}", dotPlaceHolder, dotPlaceHolder))
 
 	// Replace dots in floats (exclude dates)
-	reFloatDot := regexp.MustCompile(`(\d)\.(\d)`)
 	withPlaceHoder = reFloatDot.ReplaceAllString(withPlaceHoder, fmt.Sprintf("${1}%s${2}", dotPlaceHolder))
 
 	// Убираем символы пунктуации
-	rePunct := regexp.MustCompile(`[[:punct:]]`)
 	withoutPuncts := rePunct.ReplaceAllString(withPlaceHoder, "")
 
 	// Заменяем все отступы и переносы строк на одиночный пробел
-	reSpaces := regexp.MustCompile(`\s+`)
 	withoutSpaces := reSpaces.ReplaceAllString(withoutPuncts, " ")
 
 	// Теперь возвращаем тире обратно на место плейсхолдера
@@ -362,7 +394,7 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string,
 		Exercise: ex.String(),
 		Count:    cnt,
 		Params:   parsedParams.ToDBParams(),
-		StatusID: 1,
+		StatusID: db.StatusEnabled,
 	})
 	if err != nil {
 		return "", err
@@ -571,9 +603,9 @@ func (m *MessageHandler) prepareCorrectAndInvalidPeriods(ctx context.Context, pe
 func (m *MessageHandler) langReByLang(lang language) *regexp.Regexp {
 	switch lang {
 	case langRU:
-		return regexp.MustCompile(`^[а-яА-ЯёЁ]+$`)
+		return ruLettersOnlyRe
 	case langEN:
-		return regexp.MustCompile(`^[a-zA-Z]+$`)
+		return enLettersOnlyRe
 	}
 
 	return nil
@@ -745,8 +777,8 @@ func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedSt
 			}
 		}
 		if hasDuration {
-			if s.SumDurationSec != nil {
-				row += "\t" + formatDuration(*s.SumDurationSec, lang)
+			if s.DurationSec != nil {
+				row += "\t" + formatDuration(*s.DurationSec, lang)
 			} else {
 				row += "\t-"
 			}
@@ -792,12 +824,23 @@ func (m *MessageHandler) detectReplyButton(text string) (cmd, language, bool) {
 	return unknownCmd, "", false
 }
 
+// detectLangFromTgUser определяет язык по настройкам Telegram-пользователя.
+// Русский — для ru/uk/be/kk, английский — для всех остальных.
+func detectLangFromTgUser(user *tgbotapi.User) language {
+	if user == nil {
+		return langRU
+	}
+	switch user.LanguageCode {
+	case "ru", "uk", "be", "kk":
+		return langRU
+	default:
+		return langEN
+	}
+}
+
 // handleStart обрабатывает команду /start — отправляет приветствие и ReplyKeyboard
 func (m *MessageHandler) handleStart(ctx context.Context, upd tgbotapi.Update) {
-	lang := langRU
-	if upd.Message.From != nil && upd.Message.From.LanguageCode == "en" {
-		lang = langEN
-	}
+	lang := detectLangFromTgUser(upd.Message.From)
 
 	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, messagesByLang[lang][welcomeMsg])
 	kb := replyKeyboard(lang)
@@ -901,7 +944,13 @@ func (m *MessageHandler) handleCallback(ctx context.Context, upd tgbotapi.Update
 
 	session := m.sessions.Get(userID)
 	if session == nil {
-		session = &UserSession{Lang: langRU}
+		switch action.Type {
+		case cbQuickAdd, cbCancel, cbExercisePage:
+			session = &UserSession{Lang: detectLangFromTgUser(cb.From)}
+		default:
+			m.answerCallback(cb.ID, messagesByLang[detectLangFromTgUser(cb.From)][sessionExpired])
+			return
+		}
 	}
 
 	switch action.Type {
@@ -1005,7 +1054,7 @@ func (m *MessageHandler) handleCBQuickAdd(ctx context.Context, cb *tgbotapi.Call
 		Exercise: action.Exercise.String(),
 		Count:    action.Count,
 		Params:   action.Params,
-		StatusID: 1,
+		StatusID: db.StatusEnabled,
 	})
 	if err != nil {
 		m.Error(ctx, "quick add failed", "err", err)
@@ -1116,196 +1165,116 @@ func (m *MessageHandler) handleCBExercisePage(_ context.Context, cb *tgbotapi.Ca
 	m.answerCallback(cb.ID, "")
 }
 
+// nextStep описывает следующий незаполненный параметр в диалоге добавления
+type nextStep struct {
+	Param    ParamType
+	Optional bool // показывать кнопку «Пропустить»
+}
+
+// nextUnfilledParam определяет следующий незаполненный параметр (required → soft-required → optional).
+// Возвращает nil, если все параметры заполнены.
+func nextUnfilledParam(exercise Exercise, params *ParsedParams, skipped map[ParamType]struct{}) *nextStep {
+	cat := exercise.Category()
+
+	// 1. Обязательные
+	for _, rp := range cat.RequiredParams() {
+		if params.GetParam(rp) == nil {
+			return &nextStep{Param: rp, Optional: false}
+		}
+	}
+
+	// 2. Soft-required (хотя бы один из списка)
+	for _, sp := range cat.SoftRequiredParams() {
+		if _, ok := skipped[sp]; ok {
+			continue
+		}
+		if params.GetParam(sp) == nil {
+			optional := sp == ParamDuration && params.DistanceM != nil
+			return &nextStep{Param: sp, Optional: optional}
+		}
+	}
+
+	// 3. Необязательные
+	for _, op := range exercise.OptionalParams() {
+		if _, ok := skipped[op]; ok {
+			continue
+		}
+		if params.GetParam(op) == nil {
+			return &nextStep{Param: op, Optional: true}
+		}
+	}
+
+	return nil
+}
+
 // advanceAddDialog проверяет, какие параметры ещё не заполнены, и показывает следующий шаг
 func (m *MessageHandler) advanceAddDialog(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	if m.advanceRequired(ctx, cb, session, userID) {
+	step := nextUnfilledParam(session.Exercise, &session.Params, session.SkippedParams)
+	if step == nil {
+		m.saveFromSession(ctx, cb, session, userID)
 		return
 	}
-	if m.advanceSoftRequired(ctx, cb, session, userID) {
-		return
-	}
-	if m.advanceOptional(ctx, cb, session, userID) {
-		return
-	}
-	m.saveFromSession(ctx, cb, session, userID)
+	m.showParamStepCB(ctx, cb, session, userID, step)
 }
 
-// advanceRequired показывает следующий незаполненный обязательный параметр. Возвращает true, если показал.
-func (m *MessageHandler) advanceRequired(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) bool {
-	for _, rp := range session.Exercise.Category().RequiredParams() {
-		switch rp {
-		case ParamWeight:
-			if session.Params.WeightKg == nil {
-				m.showWeightSelection(ctx, cb, session, userID)
-				return true
-			}
-		case ParamCount:
-			if session.Params.Count == nil {
-				m.showCountSelection(cb, session, userID)
-				return true
-			}
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				m.showDistanceSelection(cb, session, userID)
-				return true
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				m.showDurationSelection(cb, session, userID)
-				return true
-			}
+// showParamStepCB показывает шаг выбора параметра, редактируя callback-сообщение
+func (m *MessageHandler) showParamStepCB(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, step *nextStep) {
+	exName := exTextByLang[session.Lang][session.Exercise]
+	lang := session.Lang
+	cat := session.Exercise.Category()
+
+	switch step.Param {
+	case ParamWeight:
+		session.State = StateAwaitWeight
+		m.sessions.Set(userID, session)
+		weights, err := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
+		if err != nil {
+			m.Error(ctx, "fetch unique weights", "err", err)
+		}
+		if step.Optional {
+			text := fmt.Sprintf(messagesByLang[lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[lang][orWriteText]
+			m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, optionalWeightInlineKeyboard(weights, lang))
+		} else {
+			text := fmt.Sprintf(messagesByLang[lang][chooseWeight], exName) + "\n" + messagesByLang[lang][orWriteText]
+			m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, weightInlineKeyboard(weights, lang))
+		}
+
+	case ParamCount:
+		session.State = StateAwaitCount
+		m.sessions.Set(userID, session)
+		var detail string
+		if session.Params.WeightKg != nil {
+			detail = " " + formatWeight(*session.Params.WeightKg, lang)
+		}
+		text := fmt.Sprintf(messagesByLang[lang][chooseCount], exName+detail) + "\n" + messagesByLang[lang][orWriteText]
+		m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, countInlineKeyboard(lang))
+
+	case ParamDistance:
+		session.State = StateAwaitDistance
+		m.sessions.Set(userID, session)
+		if step.Optional {
+			text := fmt.Sprintf(messagesByLang[lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[lang][orWriteText]
+			m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, optionalDistanceInlineKeyboard(lang))
+		} else {
+			text := fmt.Sprintf(messagesByLang[lang][chooseDistance], exName) + "\n" + messagesByLang[lang][orWriteText]
+			m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, distanceInlineKeyboard(lang))
+		}
+
+	case ParamDuration:
+		session.State = StateAwaitDuration
+		m.sessions.Set(userID, session)
+		var detail string
+		if session.Params.DistanceM != nil {
+			detail = " " + formatDistance(*session.Params.DistanceM, lang)
+		}
+		if step.Optional {
+			text := fmt.Sprintf(messagesByLang[lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[lang][orWriteText]
+			m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, optionalDurationInlineKeyboard(cat, lang))
+		} else {
+			text := fmt.Sprintf(messagesByLang[lang][chooseDuration], exName+detail) + "\n" + messagesByLang[lang][orWriteText]
+			m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, durationInlineKeyboard(cat, lang))
 		}
 	}
-	return false
-}
-
-// advanceSoftRequired показывает soft-required параметры (хотя бы один из списка). Возвращает true, если показал.
-func (m *MessageHandler) advanceSoftRequired(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) bool {
-	for _, sp := range session.Exercise.Category().SoftRequiredParams() {
-		if session.isParamSkipped(sp) {
-			continue
-		}
-		switch sp {
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				m.showOptionalDistanceSelection(cb, session, userID)
-				return true
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				if session.Params.DistanceM != nil {
-					m.showOptionalDurationSelection(cb, session, userID)
-				} else {
-					m.showDurationSelection(cb, session, userID)
-				}
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// advanceOptional показывает следующий незаполненный необязательный параметр. Возвращает true, если показал.
-func (m *MessageHandler) advanceOptional(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) bool {
-	for _, op := range session.Exercise.OptionalParams() {
-		if session.isParamSkipped(op) {
-			continue
-		}
-		switch op {
-		case ParamWeight:
-			if session.Params.WeightKg == nil {
-				m.showOptionalWeightSelection(ctx, cb, session, userID)
-				return true
-			}
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				m.showOptionalDistanceSelection(cb, session, userID)
-				return true
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				m.showOptionalDurationSelection(cb, session, userID)
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// showOptionalDistanceSelection показывает кнопки выбора дистанции с кнопкой "Пропустить"
-func (m *MessageHandler) showOptionalDistanceSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	session.State = StateAwaitDistance
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := optionalDistanceInlineKeyboard(session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
-}
-
-// showOptionalDurationSelection показывает кнопки выбора времени с кнопкой "Пропустить"
-func (m *MessageHandler) showOptionalDurationSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	session.State = StateAwaitDuration
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := optionalDurationInlineKeyboard(session.Exercise.Category(), session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
-}
-
-// showOptionalWeightSelection показывает кнопки выбора веса с кнопкой "Пропустить"
-func (m *MessageHandler) showOptionalWeightSelection(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	weights, err := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
-	if err != nil {
-		m.Error(ctx, "fetch unique weights", "err", err)
-	}
-
-	session.State = StateAwaitWeight
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := optionalWeightInlineKeyboard(weights, session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
-}
-
-// showWeightSelection показывает кнопки выбора веса
-func (m *MessageHandler) showWeightSelection(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	weights, err := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
-	if err != nil {
-		m.Error(ctx, "fetch unique weights", "err", err)
-	}
-
-	session.State = StateAwaitWeight
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := weightInlineKeyboard(weights, session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
-}
-
-// showCountSelection показывает кнопки выбора количества повторений
-func (m *MessageHandler) showCountSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	session.State = StateAwaitCount
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	var detail string
-	if session.Params.WeightKg != nil {
-		detail = " " + formatWeight(*session.Params.WeightKg, session.Lang)
-	}
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseCount], exName+detail) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := countInlineKeyboard(session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
-}
-
-// showDistanceSelection показывает кнопки выбора дистанции
-func (m *MessageHandler) showDistanceSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	session.State = StateAwaitDistance
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := distanceInlineKeyboard(session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
-}
-
-// showDurationSelection показывает кнопки выбора длительности
-func (m *MessageHandler) showDurationSelection(cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
-	session.State = StateAwaitDuration
-	m.sessions.Set(userID, session)
-
-	exName := exTextByLang[session.Lang][session.Exercise]
-	var detail string
-	if session.Params.DistanceM != nil {
-		detail = " " + formatDistance(*session.Params.DistanceM, session.Lang)
-	}
-	category := session.Exercise.Category()
-	text := fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName+detail) + "\n" + messagesByLang[session.Lang][orWriteText]
-	kb := durationInlineKeyboard(category, session.Lang)
-	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, kb)
 }
 
 // saveFromSession сохраняет упражнение из сессии в БД
@@ -1317,7 +1286,7 @@ func (m *MessageHandler) saveFromSession(ctx context.Context, cb *tgbotapi.Callb
 		Exercise: session.Exercise.String(),
 		Count:    cnt,
 		Params:   session.Params.ToDBParams(),
-		StatusID: 1,
+		StatusID: db.StatusEnabled,
 	})
 	if err != nil {
 		m.Error(ctx, "save from session failed", "err", err)
@@ -1440,7 +1409,7 @@ func (m *MessageHandler) saveFromSessionText(ctx context.Context, upd tgbotapi.U
 		Exercise: session.Exercise.String(),
 		Count:    cnt,
 		Params:   session.Params.ToDBParams(),
-		StatusID: 1,
+		StatusID: db.StatusEnabled,
 	})
 	if err != nil {
 		m.Error(ctx, "save from session text failed", "err", err)
@@ -1457,162 +1426,70 @@ func (m *MessageHandler) saveFromSessionText(ctx context.Context, upd tgbotapi.U
 // в виде нового сообщения с кнопками. Возвращает true, если показал шаг; false — если все параметры заполнены.
 // Если editMsgID > 0 — редактирует существующее сообщение вместо отправки нового.
 func (m *MessageHandler) showNextParamAsNewMessage(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
-	if m.showNextRequiredParamMsg(ctx, upd, session, userID, chatID, editMsgID) {
-		return true
+	step := nextUnfilledParam(session.Exercise, &session.Params, session.SkippedParams)
+	if step == nil {
+		return false
 	}
-	if m.showNextSoftRequiredParamMsg(upd, session, userID, chatID, editMsgID) {
-		return true
-	}
-	if m.showNextOptionalParamMsg(ctx, upd, session, userID, chatID, editMsgID) {
-		return true
-	}
-	return false
-}
 
-// showNextRequiredParamMsg показывает следующий незаполненный обязательный параметр. Возвращает true, если показал.
-func (m *MessageHandler) showNextRequiredParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
-	for _, rp := range session.Exercise.Category().RequiredParams() {
-		switch rp {
-		case ParamWeight:
-			if session.Params.WeightKg == nil {
-				session.State = StateAwaitWeight
-				m.sessions.Set(userID, session)
-				weights, _ := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseWeight], exName)
-				kb := weightInlineKeyboard(weights, session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		case ParamCount:
-			if session.Params.Count == nil {
-				session.State = StateAwaitCount
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseCount], exName)
-				kb := countInlineKeyboard(session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				session.State = StateAwaitDistance
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseDistance], exName)
-				kb := distanceInlineKeyboard(session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				session.State = StateAwaitDuration
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				cat := session.Exercise.Category()
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName)
-				kb := durationInlineKeyboard(cat, session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		}
-	}
-	return false
-}
+	exName := exTextByLang[session.Lang][session.Exercise]
+	lang := session.Lang
+	cat := session.Exercise.Category()
 
-// showNextSoftRequiredParamMsg показывает следующий незаполненный soft-required параметр с кнопкой «Пропустить».
-// Возвращает true, если показал.
-func (m *MessageHandler) showNextSoftRequiredParamMsg(upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
-	for _, sp := range session.Exercise.Category().SoftRequiredParams() {
-		if session.isParamSkipped(sp) {
-			continue
-		}
-		switch sp {
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				session.State = StateAwaitDistance
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-				kb := optionalDistanceInlineKeyboard(session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				session.State = StateAwaitDuration
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				cat := session.Exercise.Category()
-				var text string
-				var kb tgbotapi.InlineKeyboardMarkup
-				if session.Params.DistanceM != nil {
-					text = fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-					kb = optionalDurationInlineKeyboard(cat, session.Lang)
-				} else {
-					text = fmt.Sprintf(messagesByLang[session.Lang][chooseDuration], exName)
-					kb = durationInlineKeyboard(cat, session.Lang)
-				}
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		}
-	}
-	return false
-}
+	var (
+		text string
+		kb   tgbotapi.InlineKeyboardMarkup
+	)
 
-// showNextOptionalParamMsg показывает следующий незаполненный optional параметр с кнопкой «Пропустить».
-// Возвращает true, если показал.
-func (m *MessageHandler) showNextOptionalParamMsg(ctx context.Context, upd tgbotapi.Update, session *UserSession, userID string, chatID int64, editMsgID int) bool {
-	for _, op := range session.Exercise.OptionalParams() {
-		if session.isParamSkipped(op) {
-			continue
+	switch step.Param {
+	case ParamWeight:
+		session.State = StateAwaitWeight
+		weights, _ := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
+		if step.Optional {
+			text = fmt.Sprintf(messagesByLang[lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[lang][orWriteText]
+			kb = optionalWeightInlineKeyboard(weights, lang)
+		} else {
+			text = fmt.Sprintf(messagesByLang[lang][chooseWeight], exName) + "\n" + messagesByLang[lang][orWriteText]
+			kb = weightInlineKeyboard(weights, lang)
 		}
-		switch op {
-		case ParamWeight:
-			if session.Params.WeightKg == nil {
-				session.State = StateAwaitWeight
-				m.sessions.Set(userID, session)
-				weights, _ := m.statRepo.UniqueWeightsByExercise(ctx, userID, session.Exercise.String(), 5)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalWeight], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-				kb := optionalWeightInlineKeyboard(weights, session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		case ParamDistance:
-			if session.Params.DistanceM == nil {
-				session.State = StateAwaitDistance
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-				kb := optionalDistanceInlineKeyboard(session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
-		case ParamDuration:
-			if session.Params.DurationSec == nil {
-				session.State = StateAwaitDuration
-				m.sessions.Set(userID, session)
-				exName := exTextByLang[session.Lang][session.Exercise]
-				cat := session.Exercise.Category()
-				text := fmt.Sprintf(messagesByLang[session.Lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[session.Lang][orWriteText]
-				kb := optionalDurationInlineKeyboard(cat, session.Lang)
-				session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
-				m.sessions.Set(userID, session)
-				return true
-			}
+
+	case ParamCount:
+		session.State = StateAwaitCount
+		var detail string
+		if session.Params.WeightKg != nil {
+			detail = " " + formatWeight(*session.Params.WeightKg, lang)
+		}
+		text = fmt.Sprintf(messagesByLang[lang][chooseCount], exName+detail) + "\n" + messagesByLang[lang][orWriteText]
+		kb = countInlineKeyboard(lang)
+
+	case ParamDistance:
+		session.State = StateAwaitDistance
+		if step.Optional {
+			text = fmt.Sprintf(messagesByLang[lang][chooseOptionalDistance], exName) + "\n" + messagesByLang[lang][orWriteText]
+			kb = optionalDistanceInlineKeyboard(lang)
+		} else {
+			text = fmt.Sprintf(messagesByLang[lang][chooseDistance], exName) + "\n" + messagesByLang[lang][orWriteText]
+			kb = distanceInlineKeyboard(lang)
+		}
+
+	case ParamDuration:
+		session.State = StateAwaitDuration
+		var detail string
+		if session.Params.DistanceM != nil {
+			detail = " " + formatDistance(*session.Params.DistanceM, lang)
+		}
+		if step.Optional {
+			text = fmt.Sprintf(messagesByLang[lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[lang][orWriteText]
+			kb = optionalDurationInlineKeyboard(cat, lang)
+		} else {
+			text = fmt.Sprintf(messagesByLang[lang][chooseDuration], exName+detail) + "\n" + messagesByLang[lang][orWriteText]
+			kb = durationInlineKeyboard(cat, lang)
 		}
 	}
-	return false
+
+	m.sessions.Set(userID, session)
+	session.LastBotMessageID = m.sendOrEditKeyboard(upd, chatID, editMsgID, text, kb)
+	m.sessions.Set(userID, session)
+	return true
 }
 
 // sendOrEditKeyboard редактирует существующее сообщение (если editMsgID > 0) или отправляет новое.

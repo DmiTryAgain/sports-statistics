@@ -381,6 +381,10 @@ func TestFormatQuickAddButton(t *testing.T) {
 	}
 }
 
+func withQuickHint(confirm, quickCmd string, lang language) string {
+	return confirm + "\n" + fmt.Sprintf(messagesByLang[lang][quickCopyHint], "`"+quickCmd+"`")
+}
+
 func TestFormatAddConfirmation(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -395,7 +399,10 @@ func TestFormatAddConfirmation(t *testing.T) {
 			ex:   pullUpEx,
 			cnt:  12,
 			lang: langRU,
-			want: fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][pullUpEx], "×12"),
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][pullUpEx], "×12"),
+				"добавь подтягивания 12", langRU,
+			),
 		},
 		{
 			name:   "reps weight ru",
@@ -403,7 +410,10 @@ func TestFormatAddConfirmation(t *testing.T) {
 			cnt:    10,
 			params: &db.StatisticParams{WeightKg: ptr[float64](80)},
 			lang:   langRU,
-			want:   fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][benchPressEx], "80кг × 10"),
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][benchPressEx], "80кг × 10"),
+				"добавь жим лёжа 80кг 10", langRU,
+			),
 		},
 		{
 			name:   "duration ru",
@@ -411,7 +421,10 @@ func TestFormatAddConfirmation(t *testing.T) {
 			cnt:    1,
 			params: &db.StatisticParams{DurationSec: ptr[float64](90)},
 			lang:   langRU,
-			want:   fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][plankEx], formatDuration(90, langRU)),
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][plankEx], formatDuration(90, langRU)),
+				"добавь планка 1мин 30сек", langRU,
+			),
 		},
 		{
 			name:   "dist time ru",
@@ -419,14 +432,20 @@ func TestFormatAddConfirmation(t *testing.T) {
 			cnt:    1,
 			params: &db.StatisticParams{DistanceM: ptr[float64](5000), DurationSec: ptr[float64](1500)},
 			lang:   langRU,
-			want:   fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][joggingEx], "5км 25мин"),
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][joggingEx], "5км 25мин"),
+				"добавь бег 5км 25мин", langRU,
+			),
 		},
 		{
 			name: "reps en",
 			ex:   pullUpEx,
 			cnt:  12,
 			lang: langEN,
-			want: fmt.Sprintf(messagesByLang[langEN][addedConfirmation], exTextByLang[langEN][pullUpEx], "×12"),
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langEN][addedConfirmation], exTextByLang[langEN][pullUpEx], "×12"),
+				"add pull-ups 12", langEN,
+			),
 		},
 	}
 
@@ -435,6 +454,81 @@ func TestFormatAddConfirmation(t *testing.T) {
 			got := formatAddConfirmation(tt.ex, tt.cnt, tt.params, tt.lang)
 			if got != tt.want {
 				t.Errorf("formatAddConfirmation() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatQuickCopyCommand(t *testing.T) {
+	tests := []struct {
+		name   string
+		ex     Exercise
+		cnt    float64
+		params *db.StatisticParams
+		lang   language
+		want   string
+	}{
+		{
+			name: "reps only ru",
+			ex:   pullUpEx,
+			cnt:  10,
+			lang: langRU,
+			want: "добавь подтягивания 10",
+		},
+		{
+			name:   "reps weight ru",
+			ex:     benchPressEx,
+			cnt:    8,
+			params: &db.StatisticParams{WeightKg: ptr[float64](80)},
+			lang:   langRU,
+			want:   "добавь жим лёжа 80кг 8",
+		},
+		{
+			name:   "dist time ru",
+			ex:     joggingEx,
+			cnt:    1,
+			params: &db.StatisticParams{DistanceM: ptr[float64](5000), DurationSec: ptr[float64](1500)},
+			lang:   langRU,
+			want:   "добавь бег 5км 25мин",
+		},
+		{
+			name:   "duration ru",
+			ex:     plankEx,
+			cnt:    1,
+			params: &db.StatisticParams{DurationSec: ptr[float64](120)},
+			lang:   langRU,
+			want:   "добавь планка 2мин",
+		},
+		{
+			name:   "duration weight ru",
+			ex:     weightHoldEx,
+			cnt:    1,
+			params: &db.StatisticParams{WeightKg: ptr[float64](20), DurationSec: ptr[float64](60)},
+			lang:   langRU,
+			want:   "добавь удержание веса 20кг 1мин",
+		},
+		{
+			name: "reps en",
+			ex:   pushUpEx,
+			cnt:  20,
+			lang: langEN,
+			want: "add push-ups 20",
+		},
+		{
+			name:   "dist only en",
+			ex:     walkingEx,
+			cnt:    1,
+			params: &db.StatisticParams{DistanceM: ptr[float64](3000)},
+			lang:   langEN,
+			want:   "add walking 3km",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatQuickCopyCommand(tt.ex, tt.cnt, tt.params, tt.lang)
+			if got != tt.want {
+				t.Errorf("formatQuickCopyCommand() = %q, want %q", got, tt.want)
 			}
 		})
 	}

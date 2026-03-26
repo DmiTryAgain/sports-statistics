@@ -380,7 +380,8 @@ var (
 			// hollowHoldEx
 			"лодочка": hollowHoldEx,
 			"лодочку": hollowHoldEx,
-			"ладочка": hollowHoldEx,
+			"лодачку": hollowHoldEx,
+			"лодачка": hollowHoldEx,
 
 			// supermanEx
 			"супермен":  supermanEx,
@@ -392,6 +393,7 @@ var (
 			"баковая планка": sidePlankEx,
 			"боковая планку": sidePlankEx,
 			"боковую планку": sidePlankEx,
+			"боковаю планку": sidePlankEx,
 
 			// weightHoldEx
 			"удержание веса": weightHoldEx,
@@ -429,8 +431,11 @@ var (
 			"тяга верхнего блока": latPulldownEx,
 			"тяга верхнева блока": latPulldownEx,
 			"тяга верхнего блоко": latPulldownEx,
+			"тягу верхнева блока": latPulldownEx,
+			"тягу верхнего блоко": latPulldownEx,
 			"верхний блок":        latPulldownEx,
 			"верхняя тяга":        latPulldownEx,
+			"верхнюю тягу":        latPulldownEx,
 
 			// legPressEx
 			"жим ногами": legPressEx,
@@ -441,10 +446,14 @@ var (
 			// preacherCurlEx
 			"скамья скотта":   preacherCurlEx,
 			"скамья скота":    preacherCurlEx,
-			"скотта":          preacherCurlEx,
-			"скота":           preacherCurlEx,
 			"скамейка скотта": preacherCurlEx,
 			"скамейка скота":  preacherCurlEx,
+			"скамью скотта":   preacherCurlEx,
+			"скамью скота":    preacherCurlEx,
+			"скамейку скотта": preacherCurlEx,
+			"скамейку скота":  preacherCurlEx,
+			"скотта":          preacherCurlEx,
+			"скота":           preacherCurlEx,
 
 			// shoulderPressEx
 			"жим стоя":        shoulderPressEx,
@@ -454,12 +463,17 @@ var (
 			"армейскый жим":   shoulderPressEx,
 			"армейскый жым":   shoulderPressEx,
 			"жим над головой": shoulderPressEx,
+			"жим над галавой": shoulderPressEx,
 
 			// bentOverRowEx
 			"тяга в наклоне":        bentOverRowEx,
 			"тяга штанги в наклоне": bentOverRowEx,
 			"тяга штанги в наклони": bentOverRowEx,
 			"тяга в наклони":        bentOverRowEx,
+			"тягу в наклоне":        bentOverRowEx,
+			"тягу штанги в наклоне": bentOverRowEx,
+			"тягу штанги в наклони": bentOverRowEx,
+			"тягу в наклони":        bentOverRowEx,
 
 			// dumbbellCurlEx
 			"подъём гантелей":           dumbbellCurlEx,
@@ -485,18 +499,48 @@ var (
 
 			// seatedRowEx
 			"тяга нижнего блока":  seatedRowEx,
+			"тягу нижнего блока":  seatedRowEx,
+			"тяга нижниго блока":  seatedRowEx,
+			"тягу нижниго блока":  seatedRowEx,
 			"тяга нижнева блока":  seatedRowEx,
+			"тягу нижнева блока":  seatedRowEx,
+			"тяга нижнива блока":  seatedRowEx,
+			"тягу нижнива блока":  seatedRowEx,
 			"нижний блок":         seatedRowEx,
 			"нижняя тяга":         seatedRowEx,
+			"нижнюю тягу":         seatedRowEx,
 			"горизонтальная тяга": seatedRowEx,
+			"горизонтальную тягу": seatedRowEx,
+			"горезонтальную тягу": seatedRowEx,
+			"гаризонтальную тягу": seatedRowEx,
+			"гарезонтальную тягу": seatedRowEx,
+			"горизантальная тяга": seatedRowEx,
+			"горизантальную тягу": seatedRowEx,
+			"горезантальную тягу": seatedRowEx,
+			"гаризантальную тягу": seatedRowEx,
+			"гарезантальную тягу": seatedRowEx,
+			"горизонталная тяга":  seatedRowEx,
+			"горизонталную тягу":  seatedRowEx,
+			"горезонталную тягу":  seatedRowEx,
+			"гаризонталную тягу":  seatedRowEx,
+			"гарезонталную тягу":  seatedRowEx,
+			"горизанталная тяга":  seatedRowEx,
+			"горизанталную тягу":  seatedRowEx,
+			"горезанталную тягу":  seatedRowEx,
+			"гаризанталную тягу":  seatedRowEx,
+			"гарезанталную тягу":  seatedRowEx,
 
 			// chestFlyEx
 			"сведение рук":   chestFlyEx,
 			"сведения рук":   chestFlyEx,
 			"бабочка":        chestFlyEx,
 			"бабачка":        chestFlyEx,
+			"бабочку":        chestFlyEx,
+			"бабачку":        chestFlyEx,
 			"разведение рук": chestFlyEx,
 			"разведения рук": chestFlyEx,
+			"розведение рук": chestFlyEx,
+			"розведения рук": chestFlyEx,
 
 			// tricepPushdownEx
 			"разгибание на трицепс": tricepPushdownEx,
@@ -522,12 +566,61 @@ var (
 
 			// lateralRaiseEx
 			"махи гантелями":            lateralRaiseEx,
+			"махи гонтелями":            lateralRaiseEx,
+			"махи гантелей":             lateralRaiseEx,
+			"махи гонтелей":             lateralRaiseEx,
+			"махи гантелий":             lateralRaiseEx,
+			"махи гонтелий":             lateralRaiseEx,
 			"махи":                      lateralRaiseEx,
-			"разводка гантелей":         lateralRaiseEx,
 			"разводка":                  lateralRaiseEx,
+			"разводка гантелей":         lateralRaiseEx,
+			"разведение гантелей":       lateralRaiseEx,
+			"разведения гантелей":       lateralRaiseEx,
+			"розводка гантелей":         lateralRaiseEx,
+			"розведение гантелей":       lateralRaiseEx,
+			"розведения гантелей":       lateralRaiseEx,
+			"розвидение гантелей":       lateralRaiseEx,
+			"розвидения гантелей":       lateralRaiseEx,
+			"розвидене гантелей":        lateralRaiseEx,
+			"розвиденя гантелей":        lateralRaiseEx,
+			"разводка гонтелей":         lateralRaiseEx,
+			"разведение гонтелей":       lateralRaiseEx,
+			"разведения гонтелей":       lateralRaiseEx,
+			"розводка гонтелей":         lateralRaiseEx,
+			"розведение гонтелей":       lateralRaiseEx,
+			"розведения гонтелей":       lateralRaiseEx,
+			"розвидение гонтелей":       lateralRaiseEx,
+			"розвидения гонтелей":       lateralRaiseEx,
+			"розвидене гонтелей":        lateralRaiseEx,
+			"розвиденя гонтелей":        lateralRaiseEx,
+			"разводка гонтелий":         lateralRaiseEx,
+			"разведение гонтелий":       lateralRaiseEx,
+			"разведения гонтелий":       lateralRaiseEx,
+			"розводка гонтелий":         lateralRaiseEx,
+			"розведение гонтелий":       lateralRaiseEx,
+			"розведения гонтелий":       lateralRaiseEx,
+			"розвидение гонтелий":       lateralRaiseEx,
+			"розвидения гонтелий":       lateralRaiseEx,
+			"розвидене гонтелий":        lateralRaiseEx,
+			"розвиденя гонтелий":        lateralRaiseEx,
 			"махи в стороны":            lateralRaiseEx,
+			"махи в стораны":            lateralRaiseEx,
 			"подъём гантелей в стороны": lateralRaiseEx,
 			"подъем гантелей в стороны": lateralRaiseEx,
+			"подъём гонтелей в стороны": lateralRaiseEx,
+			"подъем гонтелей в стороны": lateralRaiseEx,
+			"подъём гантелий в стороны": lateralRaiseEx,
+			"подъем гантелий в стороны": lateralRaiseEx,
+			"подъём гонтелий в стороны": lateralRaiseEx,
+			"подъем гонтелий в стороны": lateralRaiseEx,
+			"подъём гантелей в стораны": lateralRaiseEx,
+			"подъем гантелей в стораны": lateralRaiseEx,
+			"подъём гонтелей в стораны": lateralRaiseEx,
+			"подъем гонтелей в стораны": lateralRaiseEx,
+			"подъём гантелий в стораны": lateralRaiseEx,
+			"подъем гантелий в стораны": lateralRaiseEx,
+			"подъём гонтелий в стораны": lateralRaiseEx,
+			"подъем гонтелий в стораны": lateralRaiseEx,
 
 			// shrugEx
 			"шраги":             shrugEx,
@@ -1166,6 +1259,8 @@ const (
 	showHelpMsg
 	helpHelpMsg
 	errMsg
+	sessionExpired
+	msgTooLong
 
 	// ReplyKeyboard кнопки
 	addBtn
@@ -1192,6 +1287,7 @@ const (
 	allExBtn
 	choosePeriod
 	addedConfirmation
+	quickCopyHint
 	orWriteText
 	skipBtn
 	chooseOptionalWeight
@@ -1260,8 +1356,10 @@ var (
 				"`за 01.10.2025-10.10.2025`\n\n" +
 				"Полный пример:\n" +
 				"`@%[1]s покажи подтягивания отжимания за сегодня за 01.10.2025-10.10.2025`\n",
-			helpHelpMsg: "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь к команде помощи🤔",
-			errMsg:      "❌ Произошла ошибка. Попробуйте позже",
+			helpHelpMsg:    "Помощь к команде помощи не предусмотрена. Надо ж было додуматься попросить помощь к команде помощи🤔",
+			errMsg:         "❌ Произошла ошибка. Попробуйте позже",
+			sessionExpired: "Сессия истекла, начните заново",
+			msgTooLong:     "Сообщение слишком длинное",
 
 			addBtn:  "📝 Добавить",
 			showBtn: "📊 Статистика",
@@ -1287,6 +1385,7 @@ var (
 			allExBtn:               "Всё",
 			choosePeriod:           "%s — за какой период?",
 			addedConfirmation:      "Добавлено ✅ %s: %s",
+			quickCopyHint:          "Скопируй для быстрой вставки: %s",
 			orWriteText:            "Или напиши текстом",
 			skipBtn:                "Пропустить",
 			chooseOptionalWeight:   "%s — добавить вес? (необязательно)",
@@ -1352,8 +1451,10 @@ var (
 				"`for 01.10.2025-10.10.2025`\n\n" +
 				"Full example:\n" +
 				"`@%[1]s show pull-ups push-ups for today for 01.10.2025-10.10.2025`\n",
-			helpHelpMsg: "Help for the help command is not provided. How did you even think to ask for help on the help command?🤔",
-			errMsg:      "❌ An error occurred. Try again later",
+			helpHelpMsg:    "Help for the help command is not provided. How did you even think to ask for help on the help command?🤔",
+			errMsg:         "❌ An error occurred. Try again later",
+			sessionExpired: "Session expired, please start again",
+			msgTooLong:     "Message is too long",
 
 			addBtn:  "📝 Add",
 			showBtn: "📊 Statistics",
@@ -1379,6 +1480,7 @@ var (
 			allExBtn:               "All",
 			choosePeriod:           "%s — for what period?",
 			addedConfirmation:      "Added ✅ %s: %s",
+			quickCopyHint:          "Copy for quick paste: %s",
 			orWriteText:            "Or type it",
 			skipBtn:                "Skip",
 			chooseOptionalWeight:   "%s — add weight? (optional)",
@@ -1484,7 +1586,7 @@ var exerciseOrder = []Exercise{
 	hollowHoldEx, supermanEx, sidePlankEx, weightHoldEx,
 }
 
-const exercisesPerPage = 9
+const exercisesPerPage = 9 // количество кнопок упражнений на одной странице (3 ряда по 3)
 
 var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 	// CategoryRepsWeight

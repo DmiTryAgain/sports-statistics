@@ -112,15 +112,6 @@ func (s *UserSession) String() string {
 	return strings.Join(parts, ", ")
 }
 
-// isParamSkipped проверяет, был ли параметр пропущен пользователем
-func (s *UserSession) isParamSkipped(p ParamType) bool {
-	if s.SkippedParams == nil {
-		return false
-	}
-	_, ok := s.SkippedParams[p]
-	return ok
-}
-
 // IsExpired проверяет, не истекла ли сессия
 func (s *UserSession) IsExpired(ttl time.Duration) bool {
 	return time.Since(s.UpdatedAt) > ttl
@@ -138,7 +129,7 @@ func (s *UserSession) Reset() {
 // SessionStore — потокобезопасное хранилище сессий.
 // Хранит значения UserSession (не указатели), чтобы Get возвращал независимую копию.
 type SessionStore struct {
-	mu       sync.RWMutex
+	mu       *sync.RWMutex
 	sessions map[string]UserSession
 }
 
@@ -147,6 +138,7 @@ type SessionStore struct {
 func NewSessionStore(ctx context.Context) *SessionStore {
 	ss := &SessionStore{
 		sessions: make(map[string]UserSession),
+		mu:       &sync.RWMutex{},
 	}
 	go ss.cleanupLoop(ctx)
 	return ss

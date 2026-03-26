@@ -157,9 +157,18 @@ func parseQuickAddCallback(parts []string) (CallbackAction, error) {
 	}
 
 	var params *db.StatisticParams
-	w := parseOptionalFloat(parts[3])
-	d := parseOptionalFloat(parts[4])
-	t := parseOptionalFloat(parts[5])
+	w, err := parseOptionalFloat(parts[3])
+	if err != nil {
+		return CallbackAction{}, fmt.Errorf("%w: %w", errInvalidCallbackData, err)
+	}
+	d, err := parseOptionalFloat(parts[4])
+	if err != nil {
+		return CallbackAction{}, fmt.Errorf("%w: %w", errInvalidCallbackData, err)
+	}
+	t, err := parseOptionalFloat(parts[5])
+	if err != nil {
+		return CallbackAction{}, fmt.Errorf("%w: %w", errInvalidCallbackData, err)
+	}
 
 	if w != nil || d != nil || t != nil {
 		params = &db.StatisticParams{
@@ -206,15 +215,15 @@ func parsePageCallback(parts []string) (CallbackAction, error) {
 	return CallbackAction{Type: cbExercisePage, Page: page, Context: cbCtx}, nil
 }
 
-func parseOptionalFloat(s string) *float64 {
+func parseOptionalFloat(s string) (*float64, error) {
 	if s == "" {
-		return nil
+		return nil, nil
 	}
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("parse optional float %q: %w", s, err)
 	}
-	return &v
+	return &v, nil
 }
 
 func formatOptionalFloat(v *float64) string {
