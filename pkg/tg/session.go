@@ -135,23 +135,26 @@ func (s *UserSession) Reset() {
 	}
 }
 
-// SessionStore — потокобезопасное хранилище сессий
+// SessionStore — потокобезопасное хранилище сессий.
+// Хранит значения UserSession (не указатели), чтобы Get возвращал независимую копию.
 type SessionStore struct {
 	mu       sync.RWMutex
-	sessions map[string]*UserSession
+	sessions map[string]UserSession
 }
 
 // NewSessionStore создаёт хранилище и запускает фоновую горутину очистки.
 // Горутина завершается при отмене ctx.
 func NewSessionStore(ctx context.Context) *SessionStore {
 	ss := &SessionStore{
-		sessions: make(map[string]*UserSession),
+		sessions: make(map[string]UserSession),
 	}
 	go ss.cleanupLoop(ctx)
 	return ss
 }
 
 // Get возвращает сессию пользователя. Если сессия истекла или не существует — nil.
+// Возвращает указатель на копию — вызывающий код может безопасно модифицировать сессию
+// без блокировки, а затем записать обратно через Set.
 func (ss *SessionStore) Get(userID string) *UserSession {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -160,7 +163,7 @@ func (ss *SessionStore) Get(userID string) *UserSession {
 	if !ok || s.IsExpired(sessionTTL) {
 		return nil
 	}
-	return s
+	return &s
 }
 
 // Set создаёт или обновляет сессию
@@ -169,7 +172,7 @@ func (ss *SessionStore) Set(userID string, session *UserSession) {
 	defer ss.mu.Unlock()
 
 	session.UpdatedAt = time.Now()
-	ss.sessions[userID] = session
+	ss.sessions[userID] = *session
 }
 
 // Delete удаляет сессию

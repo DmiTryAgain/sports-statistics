@@ -45,7 +45,7 @@ func TestSessionStore_Expiry(t *testing.T) {
 
 	ss := NewSessionStore(ctx)
 
-	session := &UserSession{
+	session := UserSession{
 		State:     StateAwaitWeight,
 		Lang:      langEN,
 		UpdatedAt: time.Now().Add(-sessionTTL - time.Minute),

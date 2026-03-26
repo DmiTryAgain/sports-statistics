@@ -38,20 +38,22 @@ type MessageHandler struct {
 	sessions *SessionStore
 }
 
-func New(ctx context.Context, logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
+func New(shutdownCtx context.Context, logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
 	h := &MessageHandler{
 		Logger:   logger,
 		dbc:      db,
 		cfg:      cfg,
 		tgBot:    tgBot,
 		statRepo: statRepo,
-		sessions: NewSessionStore(ctx),
+		sessions: NewSessionStore(shutdownCtx),
 	}
 
 	return h
 }
 
-func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
+// ListenAndHandle Слушает апдейты из канала и обрабатывает входящие сообщения.
+// shutdownCtx пока не используется, но возможно приготся позже для gracefully завершения работы, закрытия каналов и т.д.
+func (m *MessageHandler) ListenAndHandle(shutdownCtx context.Context) {
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = int(m.cfg.Timeout.Duration.Seconds())
 
@@ -65,6 +67,8 @@ func (m *MessageHandler) ListenAndHandle(ctx context.Context) {
 
 		go func() {
 			defer func() { <-limit }() // Освобождаем канал после успешного завершения горутины
+
+			ctx := context.Background()
 
 			// Обработка inline-кнопок
 			if upd.CallbackQuery != nil {
