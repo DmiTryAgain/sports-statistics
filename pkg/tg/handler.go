@@ -564,39 +564,72 @@ func (m *MessageHandler) extractExerciseAndItsPosition(words []string, lang lang
 }
 
 func (m *MessageHandler) prepareCorrectAndInvalidPeriods(ctx context.Context, periodWords []string, lang language) (res periods, invalid []string) {
-	// Проходимся по каждому периоду
-	for i := range periodWords {
+	for i := 0; i < len(periodWords); {
+		word := periodWords[i]
+
 		// Скипаем предлоги
-		if _, isPreposition := prepositionByLang[lang][periodWords[i]]; isPreposition {
+		if _, isPreposition := prepositionByLang[lang][word]; isPreposition {
+			i++
 			continue
 		}
 
-		// Если он текстовый
-		isText := m.langReByLang(lang).MatchString(periodWords[i])
-
-		// То обработаем, попробуем взять интервалы из текста
-		if isText {
-			p, ok := m.periodByText(periodWords[i], time.Now(), lang)
-			if ok { // Если получилось, добавляем в результат
+		// Если текстовое — пробуем многословный lookup (жадный, как для упражнений)
+		if m.langReByLang(lang).MatchString(word) {
+			p, consumed, ok := m.multiWordPeriodByText(periodWords[i:], time.Now(), lang)
+			if ok {
 				res = append(res, p)
+				i += consumed
 				continue
 			}
-
-			// Иначе добавляем в невалидные
-			m.Print(ctx, "captured invalid text period", "period", periodWords[i])
-			invalid = append(invalid, periodWords[i])
+			m.Print(ctx, "captured invalid text period", "period", word)
+			invalid = append(invalid, word)
+			i++
 			continue
 		}
 
 		// Иначе это должны быть даты, обработаем их
-		p, inv := m.periodByTime(ctx, periodWords[i])
+		p, inv := m.periodByTime(ctx, word)
 		invalid = append(invalid, inv...)
 		if !p.IsZero() {
 			res = append(res, p)
 		}
+		i++
 	}
 
 	return
+}
+
+// multiWordPeriodByText ищет наибольший совпадающий текстовый период, начиная с words[0].
+// Возвращает период, количество потреблённых слов и флаг успеха.
+func (m *MessageHandler) multiWordPeriodByText(words []string, now time.Time, lang language) (p period, consumed int, ok bool) {
+	re := m.langReByLang(lang)
+	candidate := ""
+	bestMatch := -1
+	var bestPeriod period
+
+	for i, w := range words {
+		if _, isPrep := prepositionByLang[lang][w]; isPrep {
+			break
+		}
+		if !re.MatchString(w) {
+			break
+		}
+
+		candidate = candidate + " " + w
+		if i == 0 {
+			candidate = w
+		}
+
+		if p2, isText := m.periodByText(candidate, now, lang); isText {
+			bestMatch = i
+			bestPeriod = p2
+		}
+	}
+
+	if bestMatch >= 0 {
+		return bestPeriod, bestMatch + 1, true
+	}
+	return period{}, 0, false
 }
 
 // langReByLang Возвращает регулярку для проверки фразы, что она состоит только из букв в текущем языке
@@ -611,13 +644,9 @@ func (m *MessageHandler) langReByLang(lang language) *regexp.Regexp {
 	return nil
 }
 
-func (m *MessageHandler) periodByText(text string, now time.Time, lang language) (period, bool) {
+func (m *MessageHandler) periodByText(text string, now time.Time, lang language) (p period, ok bool) {
 	tp := periodByLang[lang][text]
-	return periodFromTextPeriod(tp, now)
-}
 
-// periodFromTextPeriod конвертирует внутренний ключ периода (textPeriod) в period напрямую.
-func periodFromTextPeriod(tp textPeriod, now time.Time) (p period, ok bool) {
 	switch tp {
 	case todayPeriod:
 		p = period{
@@ -638,13 +667,8 @@ func periodFromTextPeriod(tp textPeriod, now time.Time) (p period, ok bool) {
 		}
 		ok = true
 	case weekPeriod:
-		// Получаем текущий день недели
-		weekday := int(now.Weekday())
-		if weekday == 0 {
-			weekday = 7 // Вс считаем послдним днём, а не первым
-		}
 		// Отнимаем от текущего момента кол-во дней равное индексу дня недели. +1 нужно, чтобы считать с понедельника
-		monday := now.AddDate(0, 0, -weekday+1)
+		monday := now.AddDate(0, 0, -isoWeekday(now.Weekday())+1)
 		p = period{
 			from: time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, time.UTC),
 			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC),
@@ -664,7 +688,104 @@ func periodFromTextPeriod(tp textPeriod, now time.Time) (p period, ok bool) {
 		ok = true
 	}
 
+	if ok {
+		return
+	}
+
+	return periodFromExtendedTextPeriod(text, lang, tp, now)
+}
+
+// periodFromExtendedTextPeriod обрабатывает периоды прошлых недель/месяцев/годов и дни недели.
+func periodFromExtendedTextPeriod(word string, lang language, tp textPeriod, now time.Time) (p period, ok bool) {
+	switch tp {
+	case lastWeekPeriod:
+		thisMonday := now.AddDate(0, 0, -isoWeekday(now.Weekday())+1)
+		lastMonday := thisMonday.AddDate(0, 0, -7)
+		p = period{
+			from: time.Date(lastMonday.Year(), lastMonday.Month(), lastMonday.Day(), 0, 0, 0, 0, time.UTC),
+			to:   time.Date(thisMonday.Year(), thisMonday.Month(), thisMonday.Day(), 0, 0, 0, 0, time.UTC),
+		}
+		ok = true
+	case weekBeforeLastPeriod:
+		thisMonday := now.AddDate(0, 0, -isoWeekday(now.Weekday())+1)
+		lastMonday := thisMonday.AddDate(0, 0, -7)
+		twoWeeksAgoMonday := thisMonday.AddDate(0, 0, -14)
+		p = period{
+			from: time.Date(twoWeeksAgoMonday.Year(), twoWeeksAgoMonday.Month(), twoWeeksAgoMonday.Day(), 0, 0, 0, 0, time.UTC),
+			to:   time.Date(lastMonday.Year(), lastMonday.Month(), lastMonday.Day(), 0, 0, 0, 0, time.UTC),
+		}
+		ok = true
+	case lastMonthPeriod:
+		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		p = period{
+			from: firstOfThisMonth.AddDate(0, -1, 0),
+			to:   firstOfThisMonth,
+		}
+		ok = true
+	case monthBeforeLastPeriod:
+		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		p = period{
+			from: firstOfThisMonth.AddDate(0, -2, 0),
+			to:   firstOfThisMonth.AddDate(0, -1, 0),
+		}
+		ok = true
+	case lastYearPeriod:
+		p = period{
+			from: time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC),
+			to:   time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		ok = true
+	case yearBeforeLastPeriod:
+		p = period{
+			from: time.Date(now.Year()-2, 1, 1, 0, 0, 0, 0, time.UTC),
+			to:   time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		ok = true
+	default:
+		if _, isWeekday := weekdayByPeriod[tp]; isWeekday {
+			p, ok = periodForWeekday(word, lang, now)
+		}
+	}
+
 	return
+}
+
+// isoWeekday конвертирует time.Weekday в ISO-номер: Mon=1 ... Sat=6, Sun=7.
+func isoWeekday(w time.Weekday) int {
+	if w == time.Sunday {
+		return 7
+	}
+	return int(w)
+}
+
+func periodForWeekday(word string, lang language, now time.Time) (period, bool) {
+	tp := periodByLang[lang][word]
+	targetWeekday, ok := weekdayByPeriod[tp]
+	if !ok {
+		return period{}, false
+	}
+
+	targetISO := isoWeekday(targetWeekday)
+	currentISO := isoWeekday(now.Weekday())
+
+	var targetDay time.Time
+	switch {
+	case targetISO == currentISO:
+		targetDay = now
+	case targetISO < currentISO:
+		targetDay = now.AddDate(0, 0, -(currentISO - targetISO))
+	default:
+		targetDay = now.AddDate(0, 0, -(7 - (targetISO - currentISO)))
+	}
+
+	from := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, time.UTC)
+	var to time.Time
+	if targetISO == currentISO {
+		to = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC)
+	} else {
+		to = from.AddDate(0, 0, 1)
+	}
+	return period{from: from, to: to}, true
 }
 
 func (m *MessageHandler) periodByTime(ctx context.Context, interval string) (p period, invalid []string) {
@@ -1098,7 +1219,7 @@ func (m *MessageHandler) handleCBShowAll(_ context.Context, cb *tgbotapi.Callbac
 
 // handleCBShowPeriod обрабатывает выбор периода для статистики
 func (m *MessageHandler) handleCBShowPeriod(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
-	p, _ := periodFromTextPeriod(action.Period, time.Now())
+	p, _ := m.periodByText(action.Period.String(), time.Now(), session.Lang)
 
 	var periodsFilter periods
 	if !p.IsZero() {

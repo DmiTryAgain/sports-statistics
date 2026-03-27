@@ -268,6 +268,10 @@ func (tp textPeriod) isAll() bool {
 	return tp == allPeriod
 }
 
+func (tp textPeriod) String() string {
+	return string(tp)
+}
+
 func textContainsAllPeriodWords(text string, lang language) bool {
 	return textContainsSubstringInMapInAllValByLang(text, periodByLang[lang])
 }

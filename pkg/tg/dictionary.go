@@ -1,6 +1,9 @@
 package tg
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	langRU language = "RU"
@@ -65,9 +68,23 @@ const (
 	yesterdayPeriod          textPeriod = "yesterday"
 	dayBeforeYesterdayPeriod textPeriod = "dayBeforeYesterday"
 	weekPeriod               textPeriod = "week"
+	lastWeekPeriod           textPeriod = "lastWeek"
+	weekBeforeLastPeriod     textPeriod = "weekBeforeLast"
 	monthPeriod              textPeriod = "month"
+	lastMonthPeriod          textPeriod = "lastMonth"
+	monthBeforeLastPeriod    textPeriod = "monthBeforeLast"
 	yearPeriod               textPeriod = "year"
+	lastYearPeriod           textPeriod = "lastYear"
+	yearBeforeLastPeriod     textPeriod = "yearBeforeLast"
 	allPeriod                textPeriod = "all"
+
+	weekdayMondayPeriod    textPeriod = "weekdayMonday"
+	weekdayTuesdayPeriod   textPeriod = "weekdayTuesday"
+	weekdayWednesdayPeriod textPeriod = "weekdayWednesday"
+	weekdayThursdayPeriod  textPeriod = "weekdayThursday"
+	weekdayFridayPeriod    textPeriod = "weekdayFriday"
+	weekdaySaturdayPeriod  textPeriod = "weekdaySaturday"
+	weekdaySundayPeriod    textPeriod = "weekdaySunday"
 )
 
 var (
@@ -1010,6 +1027,26 @@ var (
 			"ниделе": weekPeriod,
 			"нидели": weekPeriod,
 
+			"прошлую неделю": lastWeekPeriod,
+			"прошлой неделе": lastWeekPeriod,
+			"прошлой недели": lastWeekPeriod,
+			"прошлая неделя": lastWeekPeriod,
+			"неделю назад":   lastWeekPeriod,
+			"неделя назад":   lastWeekPeriod,
+			"прошлую ниделю": lastWeekPeriod,
+			"прошлой нидели": lastWeekPeriod,
+			"ниделю назад":   lastWeekPeriod,
+			"нидели назад":   lastWeekPeriod,
+
+			"позапрошлую неделю": weekBeforeLastPeriod,
+			"позапрошлой неделе": weekBeforeLastPeriod,
+			"позапрошлой недели": weekBeforeLastPeriod,
+			"позапрошлая неделя": weekBeforeLastPeriod,
+			"позапрошлую ниделю": weekBeforeLastPeriod,
+			"позапрошлой нидели": weekBeforeLastPeriod,
+			"пазапрошлую неделю": weekBeforeLastPeriod,
+			"пазапрошлой недели": weekBeforeLastPeriod,
+
 			"месяц":   monthPeriod,
 			"месяца":  monthPeriod,
 			"месяцев": monthPeriod,
@@ -1026,8 +1063,34 @@ var (
 			"месицы":  monthPeriod,
 			"месици":  monthPeriod,
 
+			"прошлый месяц":   lastMonthPeriod,
+			"прошлого месяца": lastMonthPeriod,
+			"месяц назад":     lastMonthPeriod,
+			"прошлый месец":   lastMonthPeriod,
+			"прошлый месиц":   lastMonthPeriod,
+			"месец назад":     lastMonthPeriod,
+			"месиц назад":     lastMonthPeriod,
+
+			"позапрошлый месяц":   monthBeforeLastPeriod,
+			"позапрошлого месяца": monthBeforeLastPeriod,
+			"пазапрошлый месяц":   monthBeforeLastPeriod,
+			"позапрошлый месец":   monthBeforeLastPeriod,
+			"пазапрошлый месец":   monthBeforeLastPeriod,
+
 			"год": yearPeriod,
 			"гот": yearPeriod,
+
+			"прошлый год":   lastYearPeriod,
+			"прошлого года": lastYearPeriod,
+			"год назад":     lastYearPeriod,
+			"прошлый гот":   lastYearPeriod,
+			"гот назад":     lastYearPeriod,
+
+			"позапрошлый год":   yearBeforeLastPeriod,
+			"позапрошлого года": yearBeforeLastPeriod,
+			"пазапрошлый год":   yearBeforeLastPeriod,
+			"позапрошлый гот":   yearBeforeLastPeriod,
+			"пазапрошлый гот":   yearBeforeLastPeriod,
 
 			"всё время":   allPeriod,
 			"все время":   allPeriod,
@@ -1041,6 +1104,53 @@ var (
 			"весь пириод": allPeriod,
 			"весь пириуд": allPeriod,
 			"весь пириут": allPeriod,
+
+			"понедельник":  weekdayMondayPeriod,
+			"понедельника": weekdayMondayPeriod,
+			"панедельник":  weekdayMondayPeriod,
+			"понидельник":  weekdayMondayPeriod,
+			"пн":           weekdayMondayPeriod,
+
+			"вторник":  weekdayTuesdayPeriod,
+			"вторника": weekdayTuesdayPeriod,
+			"фторник":  weekdayTuesdayPeriod,
+			"вт":       weekdayTuesdayPeriod,
+
+			"среда": weekdayWednesdayPeriod,
+			"среду": weekdayWednesdayPeriod,
+			"среды": weekdayWednesdayPeriod,
+			"сриду": weekdayWednesdayPeriod,
+			"срида": weekdayWednesdayPeriod,
+			"ср":    weekdayWednesdayPeriod,
+
+			"четверг":  weekdayThursdayPeriod,
+			"четверга": weekdayThursdayPeriod,
+			"читверг":  weekdayThursdayPeriod,
+			"четьверг": weekdayThursdayPeriod,
+			"чт":       weekdayThursdayPeriod,
+
+			"пятница": weekdayFridayPeriod,
+			"пятницу": weekdayFridayPeriod,
+			"пятницы": weekdayFridayPeriod,
+			"питница": weekdayFridayPeriod,
+			"пятнецу": weekdayFridayPeriod,
+			"пт":      weekdayFridayPeriod,
+
+			"суббота": weekdaySaturdayPeriod,
+			"субботу": weekdaySaturdayPeriod,
+			"субботы": weekdaySaturdayPeriod,
+			"субота":  weekdaySaturdayPeriod,
+			"суботу":  weekdaySaturdayPeriod,
+			"суботы":  weekdaySaturdayPeriod,
+			"сб":      weekdaySaturdayPeriod,
+
+			"воскресенье": weekdaySundayPeriod,
+			"воскресенья": weekdaySundayPeriod,
+			"воскресения": weekdaySundayPeriod,
+			"воскресение": weekdaySundayPeriod,
+			"васкресенье": weekdaySundayPeriod,
+			"воскрисенье": weekdaySundayPeriod,
+			"вс":          weekdaySundayPeriod,
 		},
 		langEN: {
 			"today":       todayPeriod,
@@ -1081,6 +1191,17 @@ var (
 			"wekk":         weekPeriod,
 			"weak":         weekPeriod,
 
+			"last week":     lastWeekPeriod,
+			"lastweek":      lastWeekPeriod,
+			"prev week":     lastWeekPeriod,
+			"previous week": lastWeekPeriod,
+			"week ago":      lastWeekPeriod,
+			"a week ago":    lastWeekPeriod,
+
+			"week before last": weekBeforeLastPeriod,
+			"2 weeks ago":      weekBeforeLastPeriod,
+			"2weeks ago":       weekBeforeLastPeriod,
+
 			"month":          monthPeriod,
 			"mth":            monthPeriod,
 			"30 days":        monthPeriod,
@@ -1091,6 +1212,17 @@ var (
 			"cur month":      monthPeriod,
 			"moneth":         monthPeriod,
 			"mounth":         monthPeriod,
+
+			"last month":     lastMonthPeriod,
+			"lastmonth":      lastMonthPeriod,
+			"prev month":     lastMonthPeriod,
+			"previous month": lastMonthPeriod,
+			"month ago":      lastMonthPeriod,
+			"a month ago":    lastMonthPeriod,
+
+			"month before last": monthBeforeLastPeriod,
+			"2 months ago":      monthBeforeLastPeriod,
+			"2months ago":       monthBeforeLastPeriod,
 
 			"year":         yearPeriod,
 			"yr":           yearPeriod,
@@ -1103,13 +1235,52 @@ var (
 			"yaer":         yearPeriod,
 			"yera":         yearPeriod,
 
+			"last year":     lastYearPeriod,
+			"lastyear":      lastYearPeriod,
+			"prev year":     lastYearPeriod,
+			"previous year": lastYearPeriod,
+			"year ago":      lastYearPeriod,
+			"a year ago":    lastYearPeriod,
+
+			"year before last": yearBeforeLastPeriod,
+			"2 years ago":      yearBeforeLastPeriod,
+			"2years ago":       yearBeforeLastPeriod,
+
 			"all":        allPeriod,
 			"everything": allPeriod,
 			"total":      allPeriod,
 			"full":       allPeriod,
 			"al":         allPeriod,
 			"aall":       allPeriod,
+
+			"monday":    weekdayMondayPeriod,
+			"mon":       weekdayMondayPeriod,
+			"tuesday":   weekdayTuesdayPeriod,
+			"tue":       weekdayTuesdayPeriod,
+			"tues":      weekdayTuesdayPeriod,
+			"wednesday": weekdayWednesdayPeriod,
+			"wed":       weekdayWednesdayPeriod,
+			"thursday":  weekdayThursdayPeriod,
+			"thu":       weekdayThursdayPeriod,
+			"thur":      weekdayThursdayPeriod,
+			"thurs":     weekdayThursdayPeriod,
+			"friday":    weekdayFridayPeriod,
+			"fri":       weekdayFridayPeriod,
+			"saturday":  weekdaySaturdayPeriod,
+			"sat":       weekdaySaturdayPeriod,
+			"sunday":    weekdaySundayPeriod,
+			"sun":       weekdaySundayPeriod,
 		},
+	}
+
+	weekdayByPeriod = map[textPeriod]time.Weekday{
+		weekdayMondayPeriod:    time.Monday,
+		weekdayTuesdayPeriod:   time.Tuesday,
+		weekdayWednesdayPeriod: time.Wednesday,
+		weekdayThursdayPeriod:  time.Thursday,
+		weekdayFridayPeriod:    time.Friday,
+		weekdaySaturdayPeriod:  time.Saturday,
+		weekdaySundayPeriod:    time.Sunday,
 	}
 
 	cmdTextByLang = map[language]map[cmd]string{
@@ -1211,18 +1382,44 @@ var (
 			yesterdayPeriod:          "вчера",
 			dayBeforeYesterdayPeriod: "позавчера",
 			weekPeriod:               "неделя",
+			lastWeekPeriod:           "прошлая неделя",
+			weekBeforeLastPeriod:     "позапрошлая неделя",
 			monthPeriod:              "месяц",
+			lastMonthPeriod:          "прошлый месяц",
+			monthBeforeLastPeriod:    "позапрошлый месяц",
 			yearPeriod:               "год",
+			lastYearPeriod:           "прошлый год",
+			yearBeforeLastPeriod:     "позапрошлый год",
 			allPeriod:                "всё время",
+			weekdayMondayPeriod:      "понедельник",
+			weekdayTuesdayPeriod:     "вторник",
+			weekdayWednesdayPeriod:   "среда",
+			weekdayThursdayPeriod:    "четверг",
+			weekdayFridayPeriod:      "пятница",
+			weekdaySaturdayPeriod:    "суббота",
+			weekdaySundayPeriod:      "воскресенье",
 		},
 		langEN: {
 			todayPeriod:              "today",
 			yesterdayPeriod:          "yesterday",
 			dayBeforeYesterdayPeriod: "a day before yesterday",
 			weekPeriod:               "week",
+			lastWeekPeriod:           "last week",
+			weekBeforeLastPeriod:     "week before last",
 			monthPeriod:              "month",
+			lastMonthPeriod:          "last month",
+			monthBeforeLastPeriod:    "month before last",
 			yearPeriod:               "year",
+			lastYearPeriod:           "last year",
+			yearBeforeLastPeriod:     "year before last",
 			allPeriod:                "all",
+			weekdayMondayPeriod:      "monday",
+			weekdayTuesdayPeriod:     "tuesday",
+			weekdayWednesdayPeriod:   "wednesday",
+			weekdayThursdayPeriod:    "thursday",
+			weekdayFridayPeriod:      "friday",
+			weekdaySaturdayPeriod:    "saturday",
+			weekdaySundayPeriod:      "sunday",
 		},
 	}
 )
@@ -1350,8 +1547,9 @@ var (
 				"`@%[1]s покажи подтягивания отжимания за неделю`\n\n" +
 				"*Или всё сразу:*\n" +
 				"`@%[1]s покажи всё за сегодня`\n\n" +
-				"*Поддерживаемые периоды:* сегодня, вчера, позавчера, неделя, месяц, год, всё время.\n" +
-				"Также можно указать точную дату или интервал:\n" +
+				"*Поддерживаемые периоды:* сегодня, вчера, позавчера, неделя, прошлая неделя, позапрошлая неделя, месяц, прошлый месяц, позапрошлый месяц, год, прошлый год, позапрошлый год, всё время.\n" +
+				"Также можно указать день недели: понедельник / пн, вторник / вт, среда / ср, четверг / чт, пятница / пт, суббота / сб, воскресенье / вс.\n" +
+				"Или точную дату или интервал:\n" +
 				"`за 15.10.2025`\n" +
 				"`за 01.10.2025-10.10.2025`\n\n" +
 				"Полный пример:\n" +
@@ -1445,8 +1643,9 @@ var (
 				"`@%[1]s show pull-ups push-ups for week`\n\n" +
 				"*Or everything at once:*\n" +
 				"`@%[1]s show all for today`\n\n" +
-				"*Supported periods:* today, yesterday, week, month, year, all.\n" +
-				"You can also specify an exact date or a range:\n" +
+				"*Supported periods:* today, yesterday, week, last week, week before last, month, last month, month before last, year, last year, year before last, all.\n" +
+				"You can also specify a weekday: monday / mon, tuesday / tue, wednesday / wed, thursday / thu, friday / fri, saturday / sat, sunday / sun.\n" +
+				"Or an exact date or a range:\n" +
 				"`for 15.10.2025`\n" +
 				"`for 01.10.2025-10.10.2025`\n\n" +
 				"Full example:\n" +

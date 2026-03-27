@@ -245,9 +245,9 @@ func TestPeriodInlineKeyboard(t *testing.T) {
 			}
 		}
 	}
-	// 6 периодов: today, yesterday, week, month, year, all
-	if periodButtons != 6 {
-		t.Errorf("expected 6 period buttons, got %d", periodButtons)
+	// 9 периодов: today, yesterday, week, lastWeek, month, lastMonth, year, lastYear, all
+	if periodButtons != 9 {
+		t.Errorf("expected 9 period buttons, got %d", periodButtons)
 	}
 
 	// Проверяем первый callback

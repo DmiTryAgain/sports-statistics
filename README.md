@@ -1,599 +1,165 @@
 # Sports Statistics Bot
 
-Telegram-бот для учёта спортивных упражнений на **русском** и **английском** языке. Поддерживает два режима взаимодействия:
+A Telegram bot for tracking sports exercises. Supports Russian and English languages.
 
-1. **Текстовый** — пользователь пишет команды свободным текстом (`сделал подтягивания 15`), бот распознаёт команду, упражнение и параметры. Толерантен к опечаткам (для каждого слова в словарях заранее предусмотрены типичные ошибки написания).
-2. **Кнопочный (inline)** — пошаговый диалог через ReplyKeyboard (постоянные кнопки внизу экрана) и InlineKeyboard (кнопки на сообщениях). Бот ведёт пользователя по шагам: выбор упражнения → ввод параметров (вес, количество, дистанция, время) → сохранение. Поддерживает **Quick-Add** — быстрое повторение частых тренировок одним нажатием.
+The bot allows you to:
+- Add completed exercises via text or buttons
+- View statistics for any period
+- Quickly repeat frequent exercises with one tap (Quick-Add)
 
----
+## Requirements
 
-## Архитектура и структура файлов
+- Go 1.24+
+- PostgreSQL
+- Telegram Bot Token (get one from [@BotFather](https://t.me/BotFather))
 
-```
-sports-statistics/
-├── main.go                       # Точка входа: конфиг, логгер, подключение к БД, запуск приложения
-├── app/
-│   └── app.go                    # Приложение: создаёт TG-бота, связывает компоненты, Run/Shutdown
-├── pkg/
-│   ├── tg/
-│   │   ├── config.go             # Конфигурация бота (Token, Name, Timeout, ReplyFormat)
-│   │   ├── handler.go            # Основная логика: обработка сообщений, callback, пошаговые диалоги
-│   │   ├── dictionary.go         # Словари: команды, упражнения, суффиксы единиц, периоды, сообщения (RU/EN)
-│   │   ├── model.go              # Типы: Exercise, ExerciseCategory, ParsedParams и др.
-│   │   ├── session.go            # Сессии пользователей: SessionStore, SessionState, TTL, фоновая очистка
-│   │   ├── callback.go           # Парсинг и кодирование callback_data для InlineKeyboard
-│   │   ├── keyboard.go           # Формирование клавиатур: Reply, Inline, Quick-Add, навигация
-│   │   ├── handler_test.go       # Тесты: парсинг параметров, форматирование, обработка сообщений
-│   │   ├── session_test.go       # Тесты: сессии, TTL, очистка
-│   │   ├── callback_test.go      # Тесты: парсинг и кодирование callback_data
-│   │   ├── keyboard_test.go      # Тесты: формирование клавиатур, Quick-Add, подтверждения
-│   │   └── dictionary_test.go    # Тесты: полнота регистрации упражнений во всех словарях
-│   └── db/
-│       ├── db.go                 # Обёртка над pg.DB, buildQuery, транзакции
-│       ├── statistic.go          # CRUD для таблицы statistics (go-pg ORM)
-│       ├── statistic_ext.go      # Кастомный SQL: GroupedStatistic, FrequentExercises, UniqueExercises/Weights
-│       ├── statistic_ext_test.go # Интеграционные тесты SQL-запросов
-│       ├── model.go              # Модель Statistic (сгенерирована mfd-generator)
-│       ├── model_params.go       # StatisticParams — структура для jsonb-параметров (вес, дистанция, время)
-│       ├── model_search.go       # StatisticSearch — динамические фильтры для ORM
-│       ├── filter.go             # Фильтры и сортировки
-│       └── ...                   # options, logger, validate
-├── docs/
-│   └── schema.sql                # DDL таблицы statistics
-└── config/                       # TOML-конфиги
+## Installation and Setup
+
+### 1. Clone
+
+```bash
+git clone https://github.com/DmiTryAgain/sports-statistics.git
+cd sports-statistics
 ```
 
----
+### 2. Configure
 
-## Жизненный цикл сообщения
-
-Бот обрабатывает два типа апдейтов: текстовые сообщения и нажатия inline-кнопок (CallbackQuery).
-
-### Текстовые сообщения
-
-```
-Пользователь отправляет сообщение в Telegram
-                │
-                ▼
-    ┌───────────────────────┐
-    │  ListenAndHandle()    │  Слушает updates через long polling
-    │  (горутина на апдейт) │  До 100 параллельных горутин (семафор)
-    └───────────┬───────────┘
-                │
-                ▼
-    ┌───────────────────────┐
-    │  /start?              │──▶ handleStart() → приветствие + ReplyKeyboard
-    └───────────┬───────────┘
-                │ нет
-                ▼
-    ┌───────────────────────┐
-    │  ReplyKeyboard?       │──▶ handleReplyButton() → маршрутизация:
-    │  detectReplyButton()  │       "Добавить" → showAddExerciseScreen()
-    └───────────┬───────────┘       "Показать" → showStatExerciseScreen()
-                │ нет                "Помощь"  → handleHelp()
-                ▼
-    ┌───────────────────────┐
-    │  Есть активная        │──▶ handleSessionText() → ввод значения в диалоге:
-    │  сессия?              │       Числовой ввод → saveFromSessionText()
-    └───────────┬───────────┘       Кнопка "Другой" → handleCustomValueInput()
-                │ нет
-                ▼
-    ┌───────────────────────┐
-    │  clearRawMsg()        │  Убирает @BotName, пунктуацию, лишние пробелы
-    │  detectLang()         │  Определяет язык (RU/EN)
-    └───────────┬───────────┘
-                │
-                ▼
-    ┌───────────────────────┐
-    │  handle()             │  Определяет команду по первому слову:
-    │    detectCmd()        │    "сделал"/"add" → addCmd
-    │                       │    "покажи"/"show" → showCmd
-    │                       │    "помощь"/"help" → helpCmd
-    └──────┬────┬────┬──────┘
-           │    │    │
-     ┌─────┘    │    └─────┐
-     ▼          ▼          ▼
-  handleAdd  handleShow  handleHelp
+```bash
+cp config/local.toml.dist config/local.toml
 ```
 
-### CallbackQuery (нажатия inline-кнопок)
+Open `config/local.toml` and fill in:
 
-```
-Пользователь нажимает inline-кнопку
-                │
-                ▼
-    ┌───────────────────────┐
-    │  handleCallback()     │  Парсит callback_data через parseCallbackData()
-    └───────────┬───────────┘
-                │
-      ┌─────┬──┴──┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
-      ▼     ▼     ▼     ▼     ▼     ▼     ▼     ▼     ▼     ▼
-     ex    w/c   d/t    cu    qa    se    sa    sp    sk    x
-     │      │     │     │     │     │     │     │     │     │
-     ▼      ▼     ▼     ▼     ▼     ▼     ▼     ▼     ▼     ▼
-  Выбор  Вес/   Дист/ Ввод  Quick Пок.  Пок.  Выбор Проп. Отмена
-  упр.   Кол-во Время вручн. Add  упр.  всё   период парам.
+```toml
+[Bot]
+Token = "your-token-from-BotFather"
+Name = "your_bot_name"
+ReplyFormat = "markdown"
+Debug = false
+Timeout = "30s"
 
-  Каждый обработчик обновляет сессию и вызывает advanceAddDialog()
-  для перехода к следующему шагу или сохранения результата.
+[Database]
+Addr     = "localhost:5432"
+User     = "postgres"
+Database = "sport_statsrv"
+Password = "postgres"
 ```
 
----
+### 3. Create the database
 
-## Три команды
-
-### 1. `handleAdd` — добавление упражнения
-
-Формат зависит от категории упражнения:
-
-```
-Обычное:        "сделал подтягивания 15"          |  "add pull-ups 15"
-С весом:        "сделал жим 80кг 10"              |  "add bench press 80kg 10"
-Бег (оба):      "сделал бег 5км 25мин"            |  "add jogging 5km 25min"
-Бег (дист.):    "сделал бег 5км"                  |  "add jogging 5km"
-Бег (время):    "сделал бег 25мин"                |  "add jogging 25min"
-Ходьба:         "сделал ходьба 3км"               |  "add walking 3km"
-Планка:         "сделал планка 1мин 30сек"        |  "add plank 1min 30sec"
-Удерж. веса:    "сделал удержание 40кг 30сек"     |  "add weight hold 40kg 30sec"
+```bash
+createdb sport_statsrv
+psql -d sport_statsrv -f docs/schema.sql
 ```
 
-**Логика:**
-1. `extractExerciseAndItsPosition()` — ищет упражнение (может состоять из 1-2+ слов)
-2. Определяет категорию упражнения через `exerciseCategoryMap`
-3. `parseExerciseParams()` — парсит оставшиеся слова:
-   - Разделяет число и суффикс единицы (`80кг` → 80 + кг, `5 км` → 5 + км)
-   - Нормализует в базовые единицы (г→кг, км→м, мин→сек)
-   - Суммирует составные значения (`1ч 30мин` → 5400 сек)
-   - Голое число без суффикса → количество повторений
-4. Валидирует обязательные параметры категории
-5. Сохраняет в БД: `count` + `params` (jsonb с весом/дистанцией/временем)
+### 4. Build and run
 
-### 2. `handleShow` — показ статистики
-
-```
-Формат: <команда> <упражнения> [периоды]
-Пример: "покажи подтягивания отжимания за неделю"  |  "show pull-ups push-ups for week"
-Всё:    "покажи всё за сегодня"                    |  "show all for today"
+```bash
+make build
+make run
 ```
 
-**Логика:**
-1. `parseRawMsgAsExercisesAndPeriods()` — парсит сообщение:
-   - Ищет упражнения (может быть несколько подряд)
-   - Проверяет слово "всё"/"all" — значит все упражнения
-   - Остаток — периоды
-2. `prepareCorrectAndInvalidPeriods()` — для каждого слова периода:
-   - Пропускает предлоги ("за", "с", "for", "from")
-   - Текстовый период → `periodByText()` (сегодня, вчера, неделя, месяц, год)
-   - Числовой период → `periodByTime()` (дата `DD.MM.YYYY` или интервал `DD.MM.YYYY-DD.MM.YYYY`)
-3. Запрос в БД: `GroupedStatisticByFilters()` — GROUP BY exercise + weight + distance, SUM(count), SUM(durationSec)
-4. Результат — единая таблица с **динамическими колонками**: колонка (вес, дистанция, время) появляется только если хотя бы одно упражнение в результате имеет этот параметр. Для упражнений без параметра выводится `-`.
+The bot will start listening for Telegram updates. Logs are written to `app.log`.
 
-Пример вывода (все категории одновременно):
-```
-упражнение      вес     дистанция    время         кол-во    подходы
-подтягивания    -       -            -             22        2
-жим лёжа        60кг    -            -             10        1
-жим лёжа        80кг    -            -             18        2
-бег             -       5км          25мин         1         1
-планка          -       -            2мин 30сек    2         2
-```
+## Usage
 
-### 3. `handleHelp` — справка
+### Getting started
 
-Показывает общую справку или справку по конкретной команде (`помощь добавь`, `help show`). Справка включает примеры для всех типов упражнений: обычных, с весом, с дистанцией и по времени.
+Send `/start` to the bot — a keyboard with three buttons will appear: **Add**, **Show**, **Help**.
 
----
+All commands can be entered as text or via buttons.
 
-## Кнопочный интерфейс
+### Adding exercises
 
-### ReplyKeyboard
+Text format: `<command> <exercise> [parameters]`
 
-При `/start` или первом сообщении бот отправляет постоянную клавиатуру с тремя кнопками:
-- **Добавить / Add** — начинает пошаговый диалог добавления
-- **Показать / Show** — начинает диалог просмотра статистики
-- **Помощь / Help** — показывает справку
+Commands: `add`, `сделал`, `добавь`
 
-Кнопки определяются языком пользователя. `detectReplyButton()` проверяет текст сообщения на совпадение с текстами кнопок обоих языков.
-
-### Пошаговый диалог добавления
+**Examples:**
 
 ```
-ReplyKeyboard "Добавить"
-        │
-        ▼
-  Экран выбора упражнения          Quick-Add кнопки
-  (InlineKeyboard с пагинацией)  + (частые комбинации)
-        │                               │
-        ▼                               ▼
-  Выбор параметров по категории    Мгновенное сохранение
-  (зависит от ExerciseCategory):   (одно нажатие)
-        │
-  ┌─────┼──────────┬───────────┬──────────────┐
-  ▼     ▼          ▼           ▼              ▼
- Reps  RepsWeight  DistTime   Duration    DurationWeight
-  │     │           │          │              │
-  │    Вес→Кол-во  Дист.⇄Время Время       Вес→Время
-  │     │           │          │              │
-  ▼     ▼          ▼           ▼              ▼
-                Опциональные параметры
-              (вес с кнопкой "Пропустить")
-                        │
-                        ▼
-              Сохранение в БД + подтверждение
+add pull-ups 15
+add bench press 80kg 10
+add jogging 5km 25min
+add plank 90sec
+add weight hold 40kg 30sec
+add squats 60kg 12
+add walking 3km
+add jogging 30min
 ```
 
-Для каждого параметра показывается InlineKeyboard с предложенными значениями (для веса — из истории пользователя) и кнопкой **«Другой»** для произвольного ввода.
+Parameters can be written together (`80kg`) or separately (`80 kg`). Supported units:
+- Weight: `kg`, `g`, `lbs` (`кг`, `г`)
+- Distance: `km`, `m` (`км`, `м`)
+- Time: `h`, `min`, `sec` (`ч`, `мин`, `сек`)
 
-### Quick-Add
+Compound time values are summed: `1h 30min` = 90 minutes.
 
-При нажатии «Добавить» бот запрашивает `FrequentExercisesByUser` — топ частых комбинаций (упражнение + count + params) за последние 30 дней. Каждая комбинация — отдельная кнопка. Одно нажатие → мгновенное сохранение без промежуточных шагов.
+### Viewing statistics
 
-Callback-данные Quick-Add: `qa|EXERCISE|COUNT|WEIGHT|DISTANCE|DURATION` — все параметры кодируются в одну строку (до 64 байт — лимит Telegram).
+Text format: `<command> <exercises> [period]`
 
-### Пошаговый диалог статистики
+Commands: `show`, `покажи`, `показать`
+
+**Examples:**
 
 ```
-ReplyKeyboard "Показать"
-        │
-        ▼
-  Уникальные упражнения пользователя
-  (InlineKeyboard) + кнопка "Все"
-        │
-        ▼
-  Выбор периода (InlineKeyboard):
-  Сегодня / Вчера / Неделя / Месяц / Год / Всё время
-        │
-        ▼
-  Таблица статистики
+show pull-ups for week
+show all for today
+show bench press squats for month
+show pull-ups for year
+show all
 ```
 
----
+Periods: `today`, `yesterday`, `week`, `last week`, `week before last`, `month`, `last month`, `month before last`, `year`, `last year`, `year before last`. Without a period — all time.
 
-## Сессии (`session.go`)
+Weekdays are also supported: `monday` (or `mon`), `tuesday` (or `tue`), `wednesday` (or `wed`), `thursday` (or `thu`), `friday` (or `fri`), `saturday` (or `sat`), `sunday` (or `sun`). If the weekday has already passed this week — shows that day this week; if not yet — shows that day last week; if today — shows from midnight to now.
 
-Для пошаговых диалогов используется **in-memory хранилище сессий** (`SessionStore`):
+Date formats are also supported: `15.03.2026` or a range `01.03.2026-15.03.2026`.
 
-- **Потокобезопасность** — `sync.RWMutex` для конкурентного доступа из горутин
-- **TTL** — сессия автоматически истекает через 10 минут неактивности
-- **Фоновая очистка** — горутина `cleanupLoop` раз в минуту удаляет истекшие сессии, завершается при отмене `ctx`
-- **Состояния (state machine)**:
-
-| Состояние | Описание |
-|-----------|----------|
-| `StateIdle` | Нет активного диалога |
-| `StateAwaitExercise` | Ожидание выбора упражнения |
-| `StateAwaitWeight` | Ожидание ввода веса |
-| `StateAwaitCount` | Ожидание ввода количества |
-| `StateAwaitDistance` | Ожидание ввода дистанции |
-| `StateAwaitDuration` | Ожидание ввода времени |
-| `StateAwaitCustomValue` | Ожидание произвольного ввода (кнопка «Другой») |
-| `StateShowAwaitExercise` | Ожидание выбора упражнения для статистики |
-| `StateShowAwaitPeriod` | Ожидание выбора периода |
-
-В сессии также хранится `SkippedParams map[ParamType]struct{}` — набор опциональных параметров, которые пользователь решил пропустить.
-
-Метод `advanceAddDialog()` проходит три уровня параметров и для каждого проверяет, заполнен ли он:
-1. **`advanceRequired`** — обязательные параметры категории (`RequiredParams`). Без них сохранение невозможно.
-2. **`advanceSoftRequired`** — soft-required параметры (`SoftRequiredParams`). Хотя бы один должен быть заполнен, остальные показываются с кнопкой «Пропустить».
-3. **`advanceOptional`** — опциональные параметры упражнения (`Exercise.OptionalParams`). Показываются с кнопкой «Пропустить».
-
-Если все параметры заполнены или пропущены — сохраняет результат.
-
----
-
-## Callback Data (`callback.go`)
-
-Формат: `TYPE|PARAM1|PARAM2|...` — компактное кодирование, помещается в 64 байта (лимит Telegram).
-
-| Префикс | Действие | Пример |
-|---------|----------|--------|
-| `ex` | Выбор упражнения | `ex\|pullUp` |
-| `w` | Выбор веса | `w\|80` |
-| `c` | Выбор количества | `c\|10` |
-| `d` | Выбор дистанции | `d\|5000` |
-| `t` | Выбор времени | `t\|1500` |
-| `cu` | Произвольный ввод | `cu\|w` |
-| `qa` | Quick-Add | `qa\|benchPress\|10\|80\|\|` |
-| `se` | Показать упражнение | `se\|pullUp` |
-| `sa` | Показать всё | `sa` |
-| `sp` | Выбор периода | `sp\|week` |
-| `sk` | Пропуск опц. параметра | `sk\|w` |
-| `pg` | Пагинация | `pg\|2\|add` |
-| `x` | Отмена | `x` |
-
----
-
-## Категории упражнений
-
-Каждое упражнение принадлежит одной из пяти категорий (`ExerciseCategory`):
-
-| Категория | Обязательные | Soft-required | Пример ввода |
-|-----------|-------------|---------------|--------------|
-| `CategoryReps` | количество | — | `подтягивания 10` |
-| `CategoryRepsWeight` | вес + количество | — | `жим 80кг 10` |
-| `CategoryDistTime` | — | хотя бы одно из: дистанция / время | `бег 5км 25мин`, `бег 5км`, `бег 25мин` |
-| `CategoryDuration` | время | — | `планка 90сек` |
-| `CategoryDurationWeight` | вес + время | — | `удержание 40кг 30сек` |
-
-**Soft-required** — параметры, хотя бы один из которых обязателен. Для `CategoryDistTime` можно указать только дистанцию, только время, или оба.
-
-Для `CategoryReps` и `CategoryDuration` поле `count` в БД заполняется автоматически (1, если не указано явно).
-
-Помимо обязательных параметров категории, конкретные упражнения могут иметь **опциональные параметры** (например, вес для подтягиваний). При текстовом вводе они парсятся автоматически, при кнопочном — показываются как дополнительный шаг с кнопкой «Пропустить».
-
----
-
-## Парсинг параметров с суффиксами
-
-Функция `parseExerciseParams` обрабатывает слова после упражнения:
-
-1. Для каждого слова пробует `parseValueWithUnit` — разделяет число и суффикс (`80кг`, `5.5км`, `30мин`)
-2. Если число слитно с суффиксом — записывает параметр
-3. Если число отдельно — проверяет следующее слово как суффикс (`80 кг`, `5 км`)
-4. Голое число без суффикса → количество повторений (обратная совместимость)
-5. Нормализует значения в базовые единицы (кг, метры, секунды)
-6. Суммирует одинаковые типы (`1ч 30мин` → 5400 сек)
-7. Валидирует наличие обязательных параметров категории
-
-Поддерживаемые суффиксы единиц (`unitSuffixByLang`). Для каждой единицы поддерживаются сокращения, полные формы, склонения и типичные опечатки — аналогично словарю упражнений:
-
-| Тип | RU (примеры) | EN (примеры) |
-|-----|----|----|
-| Вес | кг, килограмм, кило, г, грамм, гр | kg, kgs, kilogram, kilos, lbs, lb, pounds, g, grams |
-| Дистанция | км, километр, м, метр, метров | km, kms, kilometer, m, meters, mi, mile, miles |
-| Время | ч, час, часов, мин, минут, минута, сек, секунд, с | h, hr, hour, hours, min, mins, minute, sec, secs, second, s |
-| Повторения | раз, р, повторений, повтор | reps, rep, x, times |
-
----
-
-## Поддерживаемые упражнения
-
-### Без дополнительных параметров (CategoryReps)
-
-| Константа | RU | EN | Опц. вес |
-|-----------|-----|-----|:---:|
-| `pullUpEx` | подтягивания | pull-ups | да |
-| `muscleUpEx` | выход силы | muscle-ups | — |
-| `pushUpEx` | отжимания | push-ups | да |
-| `dipsEx` | брусья | dips | да |
-| `absEx` | пресс | abs | — |
-| `squatEx` | приседания | squats | да |
-| `lungeEx` | выпады | lunges | да |
-| `burpeeEx` | бёрпи | burpee | — |
-| `skippingRopeEx` | скакалка | skipping rope | — |
-| `hyperextensionEx` | гиперэкстензия | hyperextension | да |
-| `legRaiseEx` | подъём ног | leg raise | — |
-
-### С весом (CategoryRepsWeight)
-
-| Константа | RU | EN |
-|-----------|-----|-----|
-| `benchPressEx` | жим лёжа | bench press |
-| `deadliftEx` | становая тяга | deadlift |
-| `latPulldownEx` | тяга верхнего блока | lat pulldown |
-| `legPressEx` | жим ногами | leg press |
-| `preacherCurlEx` | скамья Скотта | preacher curl |
-| `shoulderPressEx` | жим стоя | shoulder press |
-| `bentOverRowEx` | тяга в наклоне | bent-over row |
-| `dumbbellCurlEx` | подъём на бицепс | dumbbell curl |
-| `legExtensionEx` | разгибание ног | leg extension |
-| `legCurlEx` | сгибание ног | leg curl |
-| `seatedRowEx` | тяга нижнего блока | seated row |
-| `chestFlyEx` | сведение рук | chest fly |
-| `tricepPushdownEx` | разгибание на трицепс | tricep pushdown |
-| `romanianDeadliftEx` | румынская тяга | romanian deadlift |
-| `hipThrustEx` | ягодичный мост | hip thrust |
-| `lateralRaiseEx` | махи гантелями | lateral raise |
-| `shrugEx` | шраги | shrugs |
-
-### Дистанция / время (CategoryDistTime)
-
-| Константа | RU | EN | Опц. вес |
-|-----------|-----|-----|:---:|
-| `joggingEx` | бег | jogging | да |
-| `walkingEx` | ходьба | walking | да |
-
-### По времени (CategoryDuration)
-
-| Константа | RU | EN | Опц. вес |
-|-----------|-----|-----|:---:|
-| `plankEx` | планка | plank | да |
-| `wallSitEx` | стульчик | wall sit | да |
-| `hangEx` | вис | hang | да |
-| `hollowHoldEx` | лодочка | hollow hold | — |
-| `supermanEx` | супермен | superman | — |
-| `sidePlankEx` | боковая планка | side plank | да |
-
-### Время + вес (CategoryDurationWeight)
-
-| Константа | RU | EN |
-|-----------|-----|-----|
-| `weightHoldEx` | удержание веса | weight hold |
-
----
-
-## Распознавание упражнений: `extractExerciseAndItsPosition`
-
-Ключевой метод. Работает со словами из массива и учитывает, что упражнение может быть:
-- **Одно слово:** "подтягивания" → `pullUpEx`
-- **Два+ слова, первое уже валидно:** "выход" → `muscleUpEx`, но "выход силы" → тоже `muscleUpEx` (уточнение)
-- **Два+ слова, первое не валидно:** "pull" не найдено → пробуем "pull up" → `pullUpEx`
-- **Два+ слова, более длинное совпадение — другое упражнение:** "жим" → `benchPressEx`, но "жим ногами" → `legPressEx` (длинное совпадение всегда приоритетнее)
-
-Алгоритм поступательно склеивает слова и ищет в словаре `exerciseByLang[lang]`. Если найдено более длинное совпадение, оно **всегда** заменяет короткое, даже если это другое упражнение. Возвращает упражнение и индекс последнего слова, чтобы вызывающий код знал, откуда продолжать парсинг.
-
----
-
-## Словари (`dictionary.go`)
-
-Вся "интеллектуальность" бота — в больших `map[string]T`:
-
-| Словарь | Назначение | Пример |
-|---------|-----------|--------|
-| `cmdByLang` | Текст → команда | "сделал", "сделол", "добавь" → `addCmd` |
-| `exerciseByLang` | Текст → упражнение | "подтягивание", "падтягивание", "pull up" → `pullUpEx` |
-| `exerciseCategoryMap` | Упражнение → категория | `benchPressEx` → `CategoryRepsWeight` |
-| `exerciseOptionalParamsMap` | Упражнение → опц. параметры | `pullUpEx` → `[ParamWeight]` |
-| `unitSuffixByLang` | Суффикс → единица измерения | "кг", "килограмм", "кило" → `{ParamWeight, 1.0}`, "км", "километр" → `{ParamDistance, 1000}` |
-| `periodByLang` | Текст → период | "сегодня", "севодня", "today" → `todayPeriod` |
-| `prepositionByLang` | Предлоги для пропуска | "за", "с", "for", "from" |
-| `messagesByLang` | Ответные сообщения бота | Ошибки, подсказки, справка |
-| `exTextByLang` | Упражнение → каноничный текст | `pullUpEx` → "подтягивания" / "pull-ups" |
-
-Каждый словарь включает типичные **опечатки**, полные формы и склонения ("падтягивание", "пакажи", "pulup", "килограмм", "километров", "минут") — это обеспечивает fuzzy-matching без NLP.
-
----
-
-## Очистка текста: `clearRawMsg`
-
-Метод решает нетривиальную задачу — убрать пунктуацию, но **сохранить**:
-- **Тире между числами** (интервал дат): `01.10.2022-10.10.2022`
-- **Точки в датах**: `15.10.2022`
-- **Точки в дробных числах**: `2.5`
-
-Для этого используется система **плейсхолдеров**:
-1. Заменяет `число-число` на `числоDASHPLACEHOLDERчисло`
-2. Заменяет точки в датах (`DD.MM.YYYY`) на `DOTPLACEHOLDER`
-3. Заменяет точки в дробных числах на `DOTPLACEHOLDER`
-4. Удаляет всю пунктуацию
-5. Возвращает плейсхолдеры обратно
-
----
-
-## Периоды
-
-Бот поддерживает два типа периодов:
-
-**Текстовые** (`periodByText`):
-
-| Период | from | to |
-|--------|------|-----|
-| today | Начало сегодня 00:00 | Текущий момент |
-| yesterday | Вчера 00:00 | Сегодня 00:00 |
-| dayBeforeYesterday | Позавчера 00:00 | Вчера 00:00 |
-| week | Понедельник 00:00 | Текущий момент |
-| month | 1-е число месяца 00:00 | Текущий момент |
-| year | 1 января 00:00 | Текущий момент |
-
-**Числовые** (`periodByTime`):
-- Одна дата: `15.10.2022` → from = начало дня, to = начало следующего дня
-- Интервал: `01.10.2022-10.10.2022` → from/to с автоматической сортировкой
-
-Форматы дат: `DD.MM.YYYY` или `DD.MM.YY`.
-
----
-
-## База данных
-
-**Одна таблица** `statistics`:
-
-| Колонка | Тип | Назначение |
-|---------|------|-----------|
-| `statisticId` | Serial PK | ID записи |
-| `tgUserId` | varchar(255) | Telegram user ID |
-| `exercise` | varchar(255) | Ключ упражнения (`pullUp`, `benchPress`, ...) |
-| `count` | float8 | Количество повторений (для планки/бега — 1) |
-| `params` | jsonb | Доп. параметры: `{"weightKg": 80}`, `{"distanceM": 5000, "durationSec": 1500}` |
-| `createdAt` | timestamptz | Время записи (default: now()) |
-| `statusId` | integer | 1=active, soft delete через статус |
-
-ORM: **go-pg/v10**. Часть моделей и поисков сгенерирована через **mfd-generator**.
-
-Параметры в `params` хранятся в **базовых единицах**:
-- `weightKg` — всегда в килограммах (ввод `500г` → хранение `0.5`)
-- `distanceM` — всегда в метрах (ввод `5км` → хранение `5000`)
-- `durationSec` — всегда в секундах (ввод `25мин` → хранение `1500`)
-
-Кастомные SQL-запросы в `statistic_ext.go`:
-
-### `GroupedStatisticByFilters` — статистика с группировкой
-```sql
-SELECT "tgUserId", "exercise",
-    sum(count) as "sumCount",
-    count(*) as "sets",
-    (params->>'weightKg')::float8 as "weightKg",
-    (params->>'distanceM')::float8 as "distanceM",
-    sum((params->>'durationSec')::float8) as "sumDurationSec"
-FROM statistics
-WHERE ... (фильтры по user, exercises, periods)
-GROUP BY "tgUserId", "exercise", params->>'weightKg', params->>'distanceM'
-ORDER BY "exercise", "weightKg" DESC NULLS LAST, "distanceM" DESC NULLS LAST, "sumCount" DESC
-```
-
-NULL-значения в PostgreSQL GROUP BY группируются вместе, поэтому для обычных упражнений (без params) поведение идентично простому `GROUP BY exercise`.
-
-### `FrequentExercisesByUser` — частые комбинации (для Quick-Add)
-Возвращает топ комбинаций (exercise + count + params) за последние 30 дней, отсортированных по частоте и свежести. Используется для формирования кнопок Quick-Add.
-
-### `UniqueExercisesByUser` — уникальные упражнения пользователя
-Возвращает `DISTINCT exercise` в алфавитном порядке. Используется для формирования InlineKeyboard при показе статистики.
-
-### `UniqueWeightsByExercise` — история весов для упражнения
-Возвращает уникальные веса (`params->>'weightKg'`) для конкретного упражнения пользователя, отсортированные по убыванию. Используется для предложения весов при добавлении упражнения с весом.
-
----
-
-## Конкурентность
-
-`ListenAndHandle` запускает горутину на каждый апдейт, но ограничивает параллелизм **буферизованным каналом на 100 элементов** (семафор). Это защищает от перегрузки при большом потоке сообщений.
-
----
-
-## Конфигурация
-
-TOML-файл (`config/local.toml`):
-- `[Database]` — параметры подключения к PostgreSQL
-- `[Bot]` — Token, Name, ReplyFormat (markdown), Debug, Timeout (для long polling)
-
----
-
-## Запуск приложения
+Example output:
 
 ```
-main.go
-  │
-  ├─ Парсинг флагов и TOML-конфига
-  ├─ Создание логгера (embedlog)
-  ├─ Подключение к PostgreSQL (go-pg)
-  ├─ app.New(ctx, ...) -> создание TG Bot API клиента
-  │                    -> создание MessageHandler
-  │                    -> создание SessionStore (+ фоновая очистка)
-  ├─ go a.Run(ctx)  -> handler.ListenAndHandle()
-  │                      └─ Бесконечный цикл: читаем updates -> горутины
-  │                         ├─ Message → handleStart / handleReplyButton / handleSessionText / handle
-  │                         └─ CallbackQuery → handleCallback → parseCallbackData → роутинг
-  └─ Ожидание SIGTERM/SIGINT -> a.Shutdown()
-                                  ├─ StopReceivingUpdates()
-                                  ├─ ctx.Cancel() → cleanupLoop завершается
-                                  └─ Close DB
+exercise        weight  count     sets
+pull-ups        -       22        2
+bench press     60kg    10        1
+bench press     80kg    18        2
 ```
 
----
+### Help
 
-## Важные детали для разработчика
+```
+help
+help add
+help show
+```
 
-1. **Определение языка** — первым делом, до любой обработки. Если в тексте смешаны кириллица и латиница — бот ответит ошибкой.
+### Button mode
 
-2. **Словарь — единственный источник "понимания"**. Чтобы бот распознавал новое слово, его нужно добавить в соответствующую `map` в `dictionary.go`.
+Press **Add** — the bot will offer a list of exercises to choose from, then step by step request parameters (weight, count, distance, time) depending on the exercise type.
 
-3. **Категории упражнений** определяют, какие параметры обязательны. Новое упражнение без записи в `exerciseCategoryMap` автоматически считается `CategoryReps` (только повторения). `CategoryDistTime` требует хотя бы одно из: дистанция или время (soft-required). Опциональные параметры задаются per-exercise через `exerciseOptionalParamsMap`.
+If you frequently do the same exercises, the bot will show **Quick-Add** buttons — add with one tap based on your history.
 
-4. **Упражнение хранится как внутренний ключ** (`pullUp`, `benchPress`), а не как введённый текст. Перевод обратно в человекочитаемый вид — через `exTextByLang`.
+After adding via buttons, the bot will show a hint with a ready-made text command for quick copying and reuse.
 
-5. **Soft delete** — записи не удаляются из БД, а помечаются `statusId`. Фильтр `StatusEnabledFilter` применяется автоматически.
+## Supported exercises
 
-6. **Поле `params` (jsonb)** — хранит нормализованные доп. параметры (вес в кг, дистанция в м, время в сек). Для обычных упражнений — `NULL`.
+**Bodyweight:** pull-ups, push-ups, dips, abs, squats, lunges, burpee, skipping rope, hyperextension, leg raise, muscle-ups
 
-7. **`count` — float64**, не int. Для упражнений без явного количества (планка, бег) записывается `1`.
+**Weighted:** bench press, deadlift, lat pulldown, leg press, preacher curl, shoulder press, bent-over row, dumbbell curl, leg extension, leg curl, seated row, chest fly, tricep pushdown, romanian deadlift, hip thrust, lateral raise, shrugs
 
-8. **Динамические колонки в таблице** — колонки вес/дистанция/время появляются в выводе только если хотя бы одно упражнение в результате имеет этот параметр. При отсутствии выводится `-`.
+**Cardio:** jogging, walking
 
-9. **Сессии хранятся in-memory** — при перезапуске бота все активные диалоги сбрасываются. Пользователь может начать заново, нажав кнопку на ReplyKeyboard.
+**Timed:** plank, wall sit, hang, hollow hold, superman, side plank
 
-10. **callback_data ≤ 64 байт** — лимит Telegram. Формат `TYPE|PARAM1|...` компактен. Quick-Add кодирует все параметры в одну строку.
+**Timed + weighted:** weight hold
 
-11. **`context.Context` пробрасывается до горутин** — `app.New(ctx, ...)` передаёт контекст в `SessionStore` и `MessageHandler`. При `ctx.Cancel()` фоновая очистка сессий завершается корректно.
+## Development
 
-12. **Текстовый и кнопочный режимы сосуществуют** — пользователь может как писать команды текстом, так и использовать кнопки. При активной сессии текст интерпретируется как ввод параметра для текущего шага.
+```bash
+make test     # run tests
+make fmt      # format code
+make lint     # linter
+```
 
-13. **Валидация регистрации упражнений** — тесты в `dictionary_test.go` проверяют, что каждое упражнение из `exerciseOrder` зарегистрировано во всех обязательных словарях (`exTextByLang`, `exerciseByLang`), и что нет «осиротевших» записей в `exerciseCategoryMap` и `exerciseOptionalParamsMap`. Запускается в CI на каждый PR.
+Technical documentation: [docs/README.md](docs/README.md)

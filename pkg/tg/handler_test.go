@@ -124,6 +124,413 @@ func TestMessageHandler_parseRawMsgAsExercisesAndPeriods(t *testing.T) {
 	}
 }
 
+func TestPeriodFromTextPeriod(t *testing.T) {
+	// Среда 2025-10-15 12:00 UTC (weekday=3)
+	now := time.Date(2025, 10, 15, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name   string
+		tp     string
+		lang   language
+		want   period
+		wantOk bool
+	}{
+		{
+			name: "lastWeek",
+			tp:   "прошлую неделю",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "weekBeforeLast",
+			tp:   "позапрошлую неделю",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 9, 29, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "lastMonth",
+			tp:   "прошлый месяц",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "monthBeforeLast",
+			tp:   "позапрошлый месяц",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "lastYear",
+			tp:   "прошлый год",
+			lang: langRU,
+			want: period{
+				from: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "yearBeforeLast",
+			tp:   "позапрошлый год",
+			lang: langRU,
+			want: period{
+				from: time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Понедельник уже прошёл на текущей неделе (пн 2025-10-13)
+			name: "weekday monday (passed this week)",
+			tp:   "пн",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Среда — сегодня
+			name: "weekday wednesday (today)",
+			tp:   "среда",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 15, 12, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Пятница ещё не наступила → прошлая неделя (2025-10-10)
+			name: "weekday friday (not yet this week)",
+			tp:   "пятнецу",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name:   "unknown period",
+			tp:     "неизвестно",
+			lang:   langRU,
+			wantOk: false,
+		},
+		{
+			name: "lastWeek",
+			tp:   "last week",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "weekBeforeLast",
+			tp:   "week before last",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 9, 29, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 6, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "lastMonth",
+			tp:   "last month",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "monthBeforeLast",
+			tp:   "month before last",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 8, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "lastYear",
+			tp:   "last year",
+			lang: langEN,
+			want: period{
+				from: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name: "yearBeforeLast",
+			tp:   "year before last",
+			lang: langEN,
+			want: period{
+				from: time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Понедельник уже прошёл на текущей неделе (пн 2025-10-13)
+			name: "weekday monday (passed this week)",
+			tp:   "mon",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Среда — сегодня
+			name: "weekday wednesday (today)",
+			tp:   "wed",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 15, 12, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Пятница ещё не наступила → прошлая неделя (2025-10-10)
+			name: "weekday friday (not yet this week)",
+			tp:   "fri",
+			lang: langEN,
+			want: period{
+				from: time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name:   "unknown period",
+			tp:     "unknown",
+			lang:   langEN,
+			wantOk: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := mh.periodByText(tt.tp, now, tt.lang)
+			if ok != tt.wantOk {
+				t.Fatalf("ok = %v, wantOk %v", ok, tt.wantOk)
+			}
+			if got != tt.want {
+				t.Errorf("period = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPeriodForWeekday(t *testing.T) {
+	// Фиксируем: среда 2025-10-15 14:30:00 UTC (weekday=3)
+	now := time.Date(2025, 10, 15, 14, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		name   string
+		word   string
+		lang   language
+		want   period
+		wantOk bool
+	}{
+		{
+			// Понедельник — уже прошёл на этой неделе (2 дня назад)
+			name: "monday - passed this week",
+			word: "пн",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Вторник — уже прошёл на этой неделе (1 день назад)
+			name: "tuesday - passed this week",
+			word: "вт",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Среда — это сегодня, to = текущий момент
+			name: "wednesday - today",
+			word: "ср",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 15, 14, 30, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Четверг — ещё не наступил, берём прошлую неделю (2025-10-09)
+			name: "thursday - not yet this week, last week",
+			word: "чт",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 9, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Пятница — ещё не наступила, берём прошлую неделю (2025-10-10)
+			name: "friday - not yet this week, last week",
+			word: "пт",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Суббота — ещё не наступила, берём прошлую неделю (2025-10-11)
+			name: "saturday - not yet this week, last week",
+			word: "сб",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 12, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Воскресенье — ещё не наступило, берём прошлую неделю (2025-10-12)
+			name: "sunday - not yet this week, last week",
+			word: "вс",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 12, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			name:   "unknown period",
+			word:   "unknown",
+			lang:   langRU,
+			wantOk: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := periodForWeekday(tt.word, tt.lang, now)
+			if ok != tt.wantOk {
+				t.Fatalf("periodForWeekday() ok = %v, wantOk %v", ok, tt.wantOk)
+			}
+			if got != tt.want {
+				t.Errorf("from = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPeriodForWeekday_Sunday(t *testing.T) {
+	// Воскресенье 2025-10-19 10:00 UTC (ISO weekday=7)
+	now := time.Date(2025, 10, 19, 10, 0, 0, 0, time.UTC)
+
+	// Воскресенье == сегодня
+	got, ok := periodForWeekday("вс", langRU, now)
+	if !ok {
+		t.Fatal("expected ok for sunday == today")
+	}
+	want1 := period{
+		from: time.Date(2025, 10, 19, 0, 0, 0, 0, time.UTC),
+		to:   time.Date(2025, 10, 19, 10, 0, 0, 0, time.UTC),
+	}
+	if got != want1 {
+		t.Errorf("from = %v, want %v", got, want1)
+	}
+
+	want2 := period{
+		from: time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+		to:   time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+	}
+	// Понедельник — ещё не наступил (воскресенье = последний день недели),
+	// берём прошлую неделю (2025-10-13)
+	got, ok = periodForWeekday("пн", langRU, now)
+	if !ok {
+		t.Fatal("expected ok for monday")
+	}
+	if got != want2 {
+		t.Errorf("from = %v, want %v", got, want2)
+	}
+}
+
+// TestParseNewPeriodKeywords проверяет, что новые ключевые слова периодов и дней недели
+// парсятся без ошибок (exact даты зависят от now, поэтому проверяем только кол-во и отсутствие invalid).
+func TestParseNewPeriodKeywords(t *testing.T) {
+	tests := []struct {
+		name   string
+		rawMsg string
+		lang   language
+		wantEx Exercises
+	}{
+		{name: "last week ru", rawMsg: "подтягивания за прошлую неделю", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "week before last ru", rawMsg: "подтягивания за позапрошлую неделю", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "last month ru", rawMsg: "подтягивания за прошлый месяц", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "month before last ru", rawMsg: "подтягивания за позапрошлый месяц", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "last year ru", rawMsg: "подтягивания за прошлый год", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "year before last ru", rawMsg: "подтягивания за позапрошлый год", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "monday ru", rawMsg: "подтягивания за понедельник", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "пн abbreviation ru", rawMsg: "подтягивания за пн", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "среда ru", rawMsg: "подтягивания за среду", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "вс ru", rawMsg: "подтягивания за вс", lang: langRU, wantEx: Exercises{pullUpEx}},
+		{name: "last week en", rawMsg: "pull ups for last week", lang: langEN, wantEx: Exercises{pullUpEx}},
+		{name: "last month en", rawMsg: "pull ups for last month", lang: langEN, wantEx: Exercises{pullUpEx}},
+		{name: "last year en", rawMsg: "pull ups for last year", lang: langEN, wantEx: Exercises{pullUpEx}},
+		{name: "friday en", rawMsg: "pull ups for friday", lang: langEN, wantEx: Exercises{pullUpEx}},
+		{name: "mon en", rawMsg: "pull ups for mon", lang: langEN, wantEx: Exercises{pullUpEx}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotEx, gotPeriods, gotInvalid, err := mh.parseRawMsgAsExercisesAndPeriods(t.Context(), tt.rawMsg, tt.lang)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(gotEx, tt.wantEx) {
+				t.Errorf("exercises = %v, want %v", gotEx, tt.wantEx)
+			}
+			if len(gotPeriods) != 1 {
+				t.Errorf("expected 1 period, got %d: %v", len(gotPeriods), gotPeriods)
+			}
+			if len(gotInvalid) != 0 {
+				t.Errorf("unexpected invalid periods: %v", gotInvalid)
+			}
+		})
+	}
+}
+
 func TestMessageHandler_multiWordsEx(t *testing.T) {
 	tests := []struct {
 		name         string

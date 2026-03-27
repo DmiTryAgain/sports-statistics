@@ -183,7 +183,7 @@ func durationInlineKeyboard(category ExerciseCategory, lang language) tgbotapi.I
 }
 
 func periodInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup {
-	periodsOrder := []textPeriod{todayPeriod, yesterdayPeriod, weekPeriod, monthPeriod, yearPeriod, allPeriod}
+	periodsOrder := []textPeriod{todayPeriod, yesterdayPeriod, weekPeriod, lastWeekPeriod, monthPeriod, lastMonthPeriod, yearPeriod, lastYearPeriod, allPeriod}
 
 	var rows [][]tgbotapi.InlineKeyboardButton
 	row := make([]tgbotapi.InlineKeyboardButton, 0, len(periodsOrder))
