@@ -647,6 +647,15 @@ func (m *MessageHandler) langReByLang(lang language) *regexp.Regexp {
 func (m *MessageHandler) periodByText(text string, now time.Time, lang language) (p period, ok bool) {
 	tp := periodByLang[lang][text]
 
+	p, ok = m.periodByTextPeriod(tp, now)
+	if ok {
+		return
+	}
+
+	return periodFromExtendedTextPeriod(text, lang, tp, now)
+}
+
+func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p period, ok bool) {
 	switch tp {
 	case todayPeriod:
 		p = period{
@@ -688,11 +697,7 @@ func (m *MessageHandler) periodByText(text string, now time.Time, lang language)
 		ok = true
 	}
 
-	if ok {
-		return
-	}
-
-	return periodFromExtendedTextPeriod(text, lang, tp, now)
+	return
 }
 
 // periodFromExtendedTextPeriod обрабатывает периоды прошлых недель/месяцев/годов и дни недели.
@@ -1219,7 +1224,7 @@ func (m *MessageHandler) handleCBShowAll(_ context.Context, cb *tgbotapi.Callbac
 
 // handleCBShowPeriod обрабатывает выбор периода для статистики
 func (m *MessageHandler) handleCBShowPeriod(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
-	p, _ := m.periodByText(action.Period.String(), time.Now(), session.Lang)
+	p, _ := m.periodByTextPeriod(action.Period, time.Now())
 
 	var periodsFilter periods
 	if !p.IsZero() {
