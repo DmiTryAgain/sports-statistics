@@ -327,6 +327,84 @@ func TestPeriodFromTextPeriod(t *testing.T) {
 			},
 			wantOk: true,
 		},
+
+		{
+			// Понедельник — уже прошёл на этой неделе (2 дня назад)
+			name: "monday - passed this week",
+			tp:   "пн",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Вторник — уже прошёл на этой неделе (1 день назад)
+			name: "tuesday - passed this week",
+			tp:   "вт",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Среда — это сегодня, to = текущий момент
+			name: "wednesday - today",
+			tp:   "ср",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 15, 12, 00, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Четверг — ещё не наступил, берём прошлую неделю (2025-10-09)
+			name: "thursday - not yet this week, last week",
+			tp:   "чт",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 9, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Пятница — ещё не наступила, берём прошлую неделю (2025-10-10)
+			name: "friday - not yet this week, last week",
+			tp:   "пт",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Суббота — ещё не наступила, берём прошлую неделю (2025-10-11)
+			name: "saturday - not yet this week, last week",
+			tp:   "сб",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 12, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
+		{
+			// Воскресенье — ещё не наступило, берём прошлую неделю (2025-10-12)
+			name: "sunday - not yet this week, last week",
+			tp:   "вс",
+			lang: langRU,
+			want: period{
+				from: time.Date(2025, 10, 12, 0, 0, 0, 0, time.UTC),
+				to:   time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
+			},
+			wantOk: true,
+		},
 		{
 			name:   "unknown period",
 			tp:     "unknown",
@@ -353,7 +431,7 @@ func TestPeriodForWeekday(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		word   string
+		tp     textPeriod
 		lang   language
 		want   period
 		wantOk bool
@@ -361,7 +439,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Понедельник — уже прошёл на этой неделе (2 дня назад)
 			name: "monday - passed this week",
-			word: "пн",
+			tp:   weekdayMondayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 13, 0, 0, 0, 0, time.UTC),
@@ -372,7 +450,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Вторник — уже прошёл на этой неделе (1 день назад)
 			name: "tuesday - passed this week",
-			word: "вт",
+			tp:   weekdayTuesdayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC),
@@ -383,7 +461,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Среда — это сегодня, to = текущий момент
 			name: "wednesday - today",
-			word: "ср",
+			tp:   weekdayWednesdayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
@@ -394,7 +472,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Четверг — ещё не наступил, берём прошлую неделю (2025-10-09)
 			name: "thursday - not yet this week, last week",
-			word: "чт",
+			tp:   weekdayThursdayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 9, 0, 0, 0, 0, time.UTC),
@@ -405,7 +483,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Пятница — ещё не наступила, берём прошлую неделю (2025-10-10)
 			name: "friday - not yet this week, last week",
-			word: "пт",
+			tp:   weekdayFridayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
@@ -416,7 +494,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Суббота — ещё не наступила, берём прошлую неделю (2025-10-11)
 			name: "saturday - not yet this week, last week",
-			word: "сб",
+			tp:   weekdaySaturdayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 11, 0, 0, 0, 0, time.UTC),
@@ -427,7 +505,7 @@ func TestPeriodForWeekday(t *testing.T) {
 		{
 			// Воскресенье — ещё не наступило, берём прошлую неделю (2025-10-12)
 			name: "sunday - not yet this week, last week",
-			word: "вс",
+			tp:   weekdaySundayPeriod,
 			lang: langRU,
 			want: period{
 				from: time.Date(2025, 10, 12, 0, 0, 0, 0, time.UTC),
@@ -437,14 +515,14 @@ func TestPeriodForWeekday(t *testing.T) {
 		},
 		{
 			name:   "unknown period",
-			word:   "unknown",
+			tp:     "unknown",
 			lang:   langRU,
 			wantOk: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := periodForWeekday(tt.word, tt.lang, now)
+			got, ok := periodForWeekday(tt.tp, now)
 			if ok != tt.wantOk {
 				t.Fatalf("periodForWeekday() ok = %v, wantOk %v", ok, tt.wantOk)
 			}
@@ -460,7 +538,7 @@ func TestPeriodForWeekday_Sunday(t *testing.T) {
 	now := time.Date(2025, 10, 19, 10, 0, 0, 0, time.UTC)
 
 	// Воскресенье == сегодня
-	got, ok := periodForWeekday("вс", langRU, now)
+	got, ok := periodForWeekday(weekdaySundayPeriod, now)
 	if !ok {
 		t.Fatal("expected ok for sunday == today")
 	}
@@ -478,7 +556,7 @@ func TestPeriodForWeekday_Sunday(t *testing.T) {
 	}
 	// Понедельник — ещё не наступил (воскресенье = последний день недели),
 	// берём прошлую неделю (2025-10-13)
-	got, ok = periodForWeekday("пн", langRU, now)
+	got, ok = periodForWeekday(weekdayMondayPeriod, now)
 	if !ok {
 		t.Fatal("expected ok for monday")
 	}

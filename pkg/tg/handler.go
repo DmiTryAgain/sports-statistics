@@ -647,12 +647,7 @@ func (m *MessageHandler) langReByLang(lang language) *regexp.Regexp {
 func (m *MessageHandler) periodByText(text string, now time.Time, lang language) (p period, ok bool) {
 	tp := periodByLang[lang][text]
 
-	p, ok = m.periodByTextPeriod(tp, now)
-	if ok {
-		return
-	}
-
-	return periodFromExtendedTextPeriod(text, lang, tp, now)
+	return m.periodByTextPeriod(tp, now)
 }
 
 func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p period, ok bool) {
@@ -695,14 +690,7 @@ func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p per
 			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC),
 		}
 		ok = true
-	}
 
-	return
-}
-
-// periodFromExtendedTextPeriod обрабатывает периоды прошлых недель/месяцев/годов и дни недели.
-func periodFromExtendedTextPeriod(word string, lang language, tp textPeriod, now time.Time) (p period, ok bool) {
-	switch tp {
 	case lastWeekPeriod:
 		thisMonday := now.AddDate(0, 0, -isoWeekday(now.Weekday())+1)
 		lastMonday := thisMonday.AddDate(0, 0, -7)
@@ -746,10 +734,9 @@ func periodFromExtendedTextPeriod(word string, lang language, tp textPeriod, now
 			to:   time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC),
 		}
 		ok = true
+
 	default:
-		if _, isWeekday := weekdayByPeriod[tp]; isWeekday {
-			p, ok = periodForWeekday(word, lang, now)
-		}
+		p, ok = periodForWeekday(tp, now)
 	}
 
 	return
@@ -763,8 +750,7 @@ func isoWeekday(w time.Weekday) int {
 	return int(w)
 }
 
-func periodForWeekday(word string, lang language, now time.Time) (period, bool) {
-	tp := periodByLang[lang][word]
+func periodForWeekday(tp textPeriod, now time.Time) (period, bool) {
 	targetWeekday, ok := weekdayByPeriod[tp]
 	if !ok {
 		return period{}, false
@@ -784,11 +770,10 @@ func periodForWeekday(word string, lang language, now time.Time) (period, bool) 
 	}
 
 	from := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, time.UTC)
-	var to time.Time
+
+	to := from.AddDate(0, 0, 1)
 	if targetISO == currentISO {
 		to = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC)
-	} else {
-		to = from.AddDate(0, 0, 1)
 	}
 	return period{from: from, to: to}, true
 }
