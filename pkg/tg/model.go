@@ -12,13 +12,14 @@ import (
 type ExerciseCategory int
 
 const (
-	CategoryReps       ExerciseCategory = iota // только повторения (текущие упражнения)
-	CategoryRepsWeight                         // повторения + вес
-	CategoryDistTime                           // дистанция + время
-	CategoryDuration                           // только время (длительность)
+	CategoryReps           ExerciseCategory = iota // только повторения (текущие упражнения)
+	CategoryRepsWeight                             // повторения + вес
+	CategoryDistTime                               // дистанция и/или время (хотя бы одно)
+	CategoryDuration                               // только время (длительность)
+	CategoryDurationWeight                         // время + вес
 )
 
-// RequiredParams возвращает список обязательных типов параметров для категории
+// RequiredParams возвращает список безусловно обязательных типов параметров для категории
 func (c ExerciseCategory) RequiredParams() []ParamType {
 	switch c {
 	case CategoryReps:
@@ -26,12 +27,52 @@ func (c ExerciseCategory) RequiredParams() []ParamType {
 	case CategoryRepsWeight:
 		return []ParamType{ParamWeight, ParamCount}
 	case CategoryDistTime:
-		return []ParamType{ParamDistance, ParamDuration}
+		return nil // хотя бы одно из (distance, duration), проверяется в ValidateParams
 	case CategoryDuration:
 		return []ParamType{ParamDuration}
+	case CategoryDurationWeight:
+		return []ParamType{ParamWeight, ParamDuration}
 	default:
 		return nil
 	}
+}
+
+// SoftRequiredParams возвращает параметры, из которых хотя бы один должен быть заполнен.
+// Для CategoryDistTime — дистанция или время.
+func (c ExerciseCategory) SoftRequiredParams() []ParamType {
+	switch c {
+	case CategoryDistTime:
+		return []ParamType{ParamDistance, ParamDuration}
+	default:
+		return nil
+	}
+}
+
+// ValidateParams проверяет наличие всех обязательных параметров.
+// Для CategoryDistTime — хотя бы одно из (distance, duration).
+func (c ExerciseCategory) ValidateParams(pp *ParsedParams) error {
+	// Проверяем безусловно обязательные
+	for _, rp := range c.RequiredParams() {
+		if pp.GetParam(rp) == nil {
+			return rp.requiredError()
+		}
+	}
+
+	// Проверяем мягкие требования (хотя бы одно)
+	soft := c.SoftRequiredParams()
+	if len(soft) > 0 {
+		hasSome := false
+		for _, sp := range soft {
+			if pp.GetParam(sp) != nil {
+				hasSome = true
+			}
+		}
+		if !hasSome {
+			return errDistOrTimeRequired
+		}
+	}
+
+	return nil
 }
 
 // ParamType — тип параметра упражнения
@@ -44,10 +85,36 @@ const (
 	ParamDuration                  // длительность: ч, мин, сек
 )
 
+// requiredError возвращает ошибку "параметр обязателен" для данного типа
+func (pt ParamType) requiredError() error {
+	switch pt {
+	case ParamCount:
+		return errCountRequired
+	case ParamWeight:
+		return errWeightRequired
+	case ParamDistance:
+		return errDistanceRequired
+	case ParamDuration:
+		return errDurationRequired
+	}
+	return nil
+}
+
 // UnitDef описывает единицу измерения и коэффициент нормализации к базовой единице
 type UnitDef struct {
 	ParamType  ParamType
 	Multiplier float64
+}
+
+// ParsedValue — результат парсинга числа с опциональной единицей измерения.
+type ParsedValue struct {
+	Value float64  // Нормализованное значение (с учётом множителя единицы, если есть)
+	Unit  *UnitDef // nil, если единица не распознана (голое число)
+}
+
+// HasUnit возвращает true, если единица измерения была распознана.
+func (p ParsedValue) HasUnit() bool {
+	return p.Unit != nil
 }
 
 // ParsedParams — результат парсинга текстовых параметров упражнения
@@ -56,6 +123,57 @@ type ParsedParams struct {
 	WeightKg    *float64 // вес в кг (нормализован)
 	DistanceM   *float64 // дистанция в метрах (нормализована)
 	DurationSec *float64 // длительность в секундах (нормализована)
+}
+
+// GetParam возвращает указатель на значение параметра по типу
+func (pp *ParsedParams) GetParam(pt ParamType) *float64 {
+	switch pt {
+	case ParamWeight:
+		return pp.WeightKg
+	case ParamCount:
+		return pp.Count
+	case ParamDistance:
+		return pp.DistanceM
+	case ParamDuration:
+		return pp.DurationSec
+	}
+	return nil
+}
+
+// SetParam устанавливает значение параметра по типу
+func (pp *ParsedParams) SetParam(pt ParamType, val float64) {
+	switch pt {
+	case ParamWeight:
+		pp.WeightKg = ptr(val)
+	case ParamCount:
+		pp.Count = ptr(val)
+	case ParamDistance:
+		pp.DistanceM = ptr(val)
+	case ParamDuration:
+		pp.DurationSec = ptr(val)
+	}
+}
+
+func (pp *ParsedParams) String() string {
+	var s []string
+	if pp.Count != nil {
+		s = append(s, fmt.Sprintf("count: %f", *pp.Count))
+	}
+	if pp.WeightKg != nil {
+		s = append(s, fmt.Sprintf("weight: %f", *pp.WeightKg))
+	}
+	if pp.DistanceM != nil {
+		s = append(s, fmt.Sprintf("distance: %f", *pp.DistanceM))
+	}
+	if pp.DurationSec != nil {
+		s = append(s, fmt.Sprintf("duration: %f", *pp.DurationSec))
+	}
+
+	if len(s) == 0 {
+		return "empty params"
+	}
+
+	return strings.Join(s, " ")
 }
 
 // ToDBParams конвертирует в структуру для БД
@@ -78,8 +196,6 @@ func (pp *ParsedParams) CountOrDefault() float64 {
 	}
 	return 1
 }
-
-func ptrFloat64(v float64) *float64 { return &v }
 
 type allChecker interface {
 	isAll() bool
@@ -110,7 +226,28 @@ func (e Exercise) Category() ExerciseCategory {
 	return cat
 }
 
+// OptionalParams возвращает список необязательных параметров для конкретного упражнения
+func (e Exercise) OptionalParams() []ParamType {
+	if params, ok := exerciseOptionalParamsMap[e]; ok {
+		return params
+	}
+	return nil
+}
+
 type Exercises []Exercise
+
+func (e Exercises) String() string {
+	b := new(strings.Builder)
+	for i := range e {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("exercise: ")
+		b.WriteString(e[i].String())
+	}
+
+	return b.String()
+}
 
 func (e Exercises) StringSlice() []string {
 	res := make([]string, len(e))
@@ -215,7 +352,7 @@ func anyHasDistance(stats []GroupedStatistic) bool {
 
 func anyHasDuration(stats []GroupedStatistic) bool {
 	for _, s := range stats {
-		if s.SumDurationSec != nil {
+		if s.DurationSec != nil {
 			return true
 		}
 	}
@@ -270,8 +407,15 @@ func formatDuration(sec float64, lang language) string {
 	}
 	hours := totalSec / 3600
 	remMin := (totalSec % 3600) / 60
-	if remMin == 0 {
+	remSec := totalSec % 60
+	switch {
+	case remMin == 0 && remSec == 0:
 		return fmt.Sprintf("%d%s", hours, suffixH)
+	case remSec == 0:
+		return fmt.Sprintf("%d%s %d%s", hours, suffixH, remMin, suffixMin)
+	case remMin == 0:
+		return fmt.Sprintf("%d%s %d%s", hours, suffixH, remSec, suffixSec)
+	default:
+		return fmt.Sprintf("%d%s %d%s %d%s", hours, suffixH, remMin, suffixMin, remSec, suffixSec)
 	}
-	return fmt.Sprintf("%d%s %d%s", hours, suffixH, remMin, suffixMin)
 }

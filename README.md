@@ -1,395 +1,165 @@
 # Sports Statistics Bot
 
-Telegram-бот для учёта спортивных упражнений. Пользователь пишет боту текстовые сообщения на **русском** или **английском** языке, бот распознаёт команду, упражнение и параметры — и либо сохраняет результат тренировки, либо выводит статистику в виде таблицы.
+A Telegram bot for tracking sports exercises. Supports Russian and English languages.
 
-Всё взаимодействие — **через свободный текст**, без кнопок и меню. Бот толерантен к опечаткам (для каждого слова в словарях заранее предусмотрены типичные ошибки написания).
+The bot allows you to:
+- Add completed exercises via text or buttons
+- View statistics for any period
+- Quickly repeat frequent exercises with one tap (Quick-Add)
 
----
+## Requirements
 
-## Архитектура и структура файлов
+- Go 1.24+
+- PostgreSQL
+- Telegram Bot Token (get one from [@BotFather](https://t.me/BotFather))
 
-```
-sports-statistics/
-├── main.go                  # Точка входа: конфиг, логгер, подключение к БД, запуск приложения
-├── app/
-│   └── app.go               # Приложение: создаёт TG-бота, связывает компоненты, Run/Shutdown
-├── pkg/
-│   ├── tg/
-│   │   ├── config.go        # Конфигурация бота (Token, Name, Timeout, ReplyFormat)
-│   │   ├── handler.go       # Основная логика обработки сообщений, парсинг параметров
-│   │   ├── dictionary.go    # Словари: команды, упражнения, суффиксы единиц, периоды, сообщения (RU/EN)
-│   │   ├── model.go         # Типы: Exercise, ExerciseCategory, ParsedParams, GroupedStatistic и др.
-│   │   └── handler_test.go  # Тесты: парсинг параметров, форматирование, обработка сообщений
-│   └── db/
-│       ├── db.go            # Обёртка над pg.DB, buildQuery, транзакции
-│       ├── statistic.go     # CRUD для таблицы statistics (go-pg ORM)
-│       ├── statistic_ext.go # Кастомный SQL: GroupedStatisticByFilters (GROUP BY + SUM + jsonb)
-│       ├── model.go         # Модель Statistic (сгенерирована mfd-generator)
-│       ├── model_params.go  # StatisticParams — структура для jsonb-параметров (вес, дистанция, время)
-│       ├── model_search.go  # StatisticSearch — динамические фильтры для ORM
-│       ├── filter.go        # Фильтры и сортировки
-│       └── ...              # options, logger, validate
-├── docs/
-│   └── schema.sql           # DDL таблицы statistics
-└── config/                  # TOML-конфиги
+## Installation and Setup
+
+### 1. Clone
+
+```bash
+git clone https://github.com/DmiTryAgain/sports-statistics.git
+cd sports-statistics
 ```
 
----
+### 2. Configure
 
-## Жизненный цикл сообщения
-
-```
-Пользователь отправляет сообщение в Telegram
-                │
-                ▼
-    ┌───────────────────────┐
-    │  ListenAndHandle()    │  Слушает updates через long polling
-    │  (горутина на апдейт) │  До 100 параллельных горутин (семафор)
-    └───────────┬───────────┘
-                │
-                ▼
-    ┌───────────────────────┐
-    │  Проверка: к нам ли   │  В группе — ищет @BotName в тексте
-    │  обращаются?          │  В личке — всегда обрабатывает
-    └───────────┬───────────┘
-                │
-                ▼
-    ┌───────────────────────┐
-    │  clearRawMsg()        │  Убирает @BotName, пунктуацию, лишние пробелы
-    │                       │  Сохраняет тире между числами (даты/интервалы)
-    │                       │  Сохраняет точки в датах и дробных числах
-    └───────────┬───────────┘
-                │
-                ▼
-    ┌───────────────────────┐
-    │  detectLang()         │  RU — если все символы кириллица + цифры
-    │                       │  EN — если все символы латиница + цифры
-    │                       │  Ошибка — если смешано
-    └───────────┬───────────┘
-                │
-                ▼
-    ┌───────────────────────┐
-    │  handle()             │  Определяет команду по первому слову:
-    │    detectCmd()        │    "сделал"/"add" → addCmd
-    │                       │    "покажи"/"show" → showCmd
-    │                       │    "помощь"/"help" → helpCmd
-    └──────┬────┬────┬──────┘
-           │    │    │
-     ┌─────┘    │    └─────┐
-     ▼          ▼          ▼
-  handleAdd  handleShow  handleHelp
+```bash
+cp config/local.toml.dist config/local.toml
 ```
 
----
+Open `config/local.toml` and fill in:
 
-## Три команды
+```toml
+[Bot]
+Token = "your-token-from-BotFather"
+Name = "your_bot_name"
+ReplyFormat = "markdown"
+Debug = false
+Timeout = "30s"
 
-### 1. `handleAdd` — добавление упражнения
-
-Формат зависит от категории упражнения:
-
-```
-Обычное:    "сделал подтягивания 15"          |  "add pull-ups 15"
-С весом:    "сделал жим 80кг 10"              |  "add bench press 80kg 10"
-Бег:        "сделал бег 5км 25мин"            |  "add jogging 5km 25min"
-Планка:     "сделал планка 1мин 30сек"        |  "add plank 1min 30sec"
-```
-
-**Логика:**
-1. `extractExerciseAndItsPosition()` — ищет упражнение (может состоять из 1-2+ слов)
-2. Определяет категорию упражнения через `exerciseCategoryMap`
-3. `parseExerciseParams()` — парсит оставшиеся слова:
-   - Разделяет число и суффикс единицы (`80кг` → 80 + кг, `5 км` → 5 + км)
-   - Нормализует в базовые единицы (г→кг, км→м, мин→сек)
-   - Суммирует составные значения (`1ч 30мин` → 5400 сек)
-   - Голое число без суффикса → количество повторений
-4. Валидирует обязательные параметры категории
-5. Сохраняет в БД: `count` + `params` (jsonb с весом/дистанцией/временем)
-
-### 2. `handleShow` — показ статистики
-
-```
-Формат: <команда> <упражнения> [периоды]
-Пример: "покажи подтягивания отжимания за неделю"  |  "show pull-ups push-ups for week"
-Всё:    "покажи всё за сегодня"                    |  "show all for today"
+[Database]
+Addr     = "localhost:5432"
+User     = "postgres"
+Database = "sport_statsrv"
+Password = "postgres"
 ```
 
-**Логика:**
-1. `parseRawMsgAsExercisesAndPeriods()` — парсит сообщение:
-   - Ищет упражнения (может быть несколько подряд)
-   - Проверяет слово "всё"/"all" — значит все упражнения
-   - Остаток — периоды
-2. `prepareCorrectAndInvalidPeriods()` — для каждого слова периода:
-   - Пропускает предлоги ("за", "с", "for", "from")
-   - Текстовый период → `periodByText()` (сегодня, вчера, неделя, месяц, год)
-   - Числовой период → `periodByTime()` (дата `DD.MM.YYYY` или интервал `DD.MM.YYYY-DD.MM.YYYY`)
-3. Запрос в БД: `GroupedStatisticByFilters()` — GROUP BY exercise + weight + distance, SUM(count), SUM(durationSec)
-4. Результат — единая таблица с **динамическими колонками**: колонка (вес, дистанция, время) появляется только если хотя бы одно упражнение в результате имеет этот параметр. Для упражнений без параметра выводится `-`.
+### 3. Create the database
 
-Пример вывода (все категории одновременно):
-```
-упражнение      вес     дистанция    время         кол-во    подходы
-подтягивания    -       -            -             22        2
-жим лёжа        60кг    -            -             10        1
-жим лёжа        80кг    -            -             18        2
-бег             -       5км          25мин         1         1
-планка          -       -            2мин 30сек    2         2
+```bash
+createdb sport_statsrv
+psql -d sport_statsrv -f docs/schema.sql
 ```
 
-### 3. `handleHelp` — справка
+### 4. Build and run
 
-Показывает общую справку или справку по конкретной команде (`помощь добавь`, `help show`). Справка включает примеры для всех типов упражнений: обычных, с весом, с дистанцией и по времени.
-
----
-
-## Категории упражнений
-
-Каждое упражнение принадлежит одной из четырёх категорий (`ExerciseCategory`):
-
-| Категория | Обязательные параметры | Пример ввода |
-|-----------|----------------------|--------------|
-| `CategoryReps` | количество | `подтягивания 10` |
-| `CategoryRepsWeight` | вес + количество | `жим 80кг 10` |
-| `CategoryDistTime` | дистанция + время | `бег 5км 25мин` |
-| `CategoryDuration` | время | `планка 90сек` |
-
-Для `CategoryReps` и `CategoryDuration` поле `count` в БД заполняется автоматически (1, если не указано явно).
-
----
-
-## Парсинг параметров с суффиксами
-
-Функция `parseExerciseParams` обрабатывает слова после упражнения:
-
-1. Для каждого слова пробует `parseValueWithUnit` — разделяет число и суффикс (`80кг`, `5.5км`, `30мин`)
-2. Если число слитно с суффиксом — записывает параметр
-3. Если число отдельно — проверяет следующее слово как суффикс (`80 кг`, `5 км`)
-4. Голое число без суффикса → количество повторений (обратная совместимость)
-5. Нормализует значения в базовые единицы (кг, метры, секунды)
-6. Суммирует одинаковые типы (`1ч 30мин` → 5400 сек)
-7. Валидирует наличие обязательных параметров категории
-
-Поддерживаемые суффиксы единиц (`unitSuffixByLang`):
-
-| Тип | RU | EN |
-|-----|----|----|
-| Вес | кг, г | kg, lbs, lb, g |
-| Дистанция | км, м | km, m, mi |
-| Время | ч, мин, сек, с | h, hr, min, sec, s |
-| Повторения | раз, р | reps, rep, x |
-
----
-
-## Поддерживаемые упражнения
-
-### Без дополнительных параметров (CategoryReps)
-
-| Константа | RU | EN |
-|-----------|-----|-----|
-| `pullUpEx` | подтягивания | pull-ups |
-| `muscleUpEx` | выход силы | muscle-ups |
-| `pushUpEx` | отжимания | push-ups |
-| `dipsEx` | брусья | dips |
-| `absEx` | пресс | abs |
-| `squatEx` | приседания | squats |
-| `lungeEx` | выпады | lunges |
-| `burpeeEx` | бёрпи | burpee |
-| `skippingRopeEx` | скакалка | skipping rope |
-| `hyperextensionEx` | гиперэкстензия | hyperextension |
-| `legRaiseEx` | подъём ног | leg raise |
-
-### С весом (CategoryRepsWeight)
-
-| Константа | RU | EN |
-|-----------|-----|-----|
-| `benchPressEx` | жим лёжа | bench press |
-| `deadliftEx` | становая тяга | deadlift |
-| `barbellSquatEx` | присед со штангой | barbell squat |
-| `latPulldownEx` | тяга верхнего блока | lat pulldown |
-| `legPressEx` | жим ногами | leg press |
-| `preacherCurlEx` | скамья Скотта | preacher curl |
-| `shoulderPressEx` | жим стоя | shoulder press |
-| `bentOverRowEx` | тяга в наклоне | bent-over row |
-| `dumbbellCurlEx` | подъём на бицепс | dumbbell curl |
-| `legExtensionEx` | разгибание ног | leg extension |
-| `legCurlEx` | сгибание ног | leg curl |
-| `seatedRowEx` | тяга нижнего блока | seated row |
-| `chestFlyEx` | сведение рук | chest fly |
-| `tricepPushdownEx` | разгибание на трицепс | tricep pushdown |
-| `romanianDeadliftEx` | румынская тяга | romanian deadlift |
-| `hipThrustEx` | ягодичный мост | hip thrust |
-| `lateralRaiseEx` | махи гантелями | lateral raise |
-| `shrugEx` | шраги | shrugs |
-
-### Бег (CategoryDistTime)
-
-| Константа | RU | EN |
-|-----------|-----|-----|
-| `joggingEx` | бег | jogging |
-
-### По времени (CategoryDuration)
-
-| Константа | RU | EN |
-|-----------|-----|-----|
-| `plankEx` | планка | plank |
-
----
-
-## Распознавание упражнений: `extractExerciseAndItsPosition`
-
-Ключевой метод. Работает со словами из массива и учитывает, что упражнение может быть:
-- **Одно слово:** "подтягивания" → `pullUpEx`
-- **Два+ слова, первое уже валидно:** "выход" → `muscleUpEx`, но "выход силы" → тоже `muscleUpEx` (уточнение)
-- **Два+ слова, первое не валидно:** "pull" не найдено → пробуем "pull up" → `pullUpEx`
-
-Алгоритм поступательно склеивает слова и ищет в словаре `exerciseByLang[lang]`. Возвращает упражнение и индекс последнего слова, чтобы вызывающий код знал, откуда продолжать парсинг.
-
----
-
-## Словари (`dictionary.go`)
-
-Вся "интеллектуальность" бота — в больших `map[string]T`:
-
-| Словарь | Назначение | Пример |
-|---------|-----------|--------|
-| `cmdByLang` | Текст → команда | "сделал", "сделол", "добавь" → `addCmd` |
-| `exerciseByLang` | Текст → упражнение | "подтягивание", "падтягивание", "pull up" → `pullUpEx` |
-| `exerciseCategoryMap` | Упражнение → категория | `benchPressEx` → `CategoryRepsWeight` |
-| `unitSuffixByLang` | Суффикс → единица измерения | "кг" → `{ParamWeight, 1.0}`, "км" → `{ParamDistance, 1000}` |
-| `periodByLang` | Текст → период | "сегодня", "севодня", "today" → `todayPeriod` |
-| `prepositionByLang` | Предлоги для пропуска | "за", "с", "for", "from" |
-| `messagesByLang` | Ответные сообщения бота | Ошибки, подсказки, справка |
-| `exTextByLang` | Упражнение → каноничный текст | `pullUpEx` → "подтягивания" / "pull-ups" |
-
-Каждый словарь включает типичные **опечатки** ("падтягивание", "пакажи", "pulup") — это обеспечивает fuzzy-matching без NLP.
-
----
-
-## Очистка текста: `clearRawMsg`
-
-Метод решает нетривиальную задачу — убрать пунктуацию, но **сохранить**:
-- **Тире между числами** (интервал дат): `01.10.2022-10.10.2022`
-- **Точки в датах**: `15.10.2022`
-- **Точки в дробных числах**: `2.5`
-
-Для этого используется система **плейсхолдеров**:
-1. Заменяет `число-число` на `числоDASHPLACEHOLDERчисло`
-2. Заменяет точки в датах (`DD.MM.YYYY`) на `DOTPLACEHOLDER`
-3. Заменяет точки в дробных числах на `DOTPLACEHOLDER`
-4. Удаляет всю пунктуацию
-5. Возвращает плейсхолдеры обратно
-
----
-
-## Периоды
-
-Бот поддерживает два типа периодов:
-
-**Текстовые** (`periodByText`):
-
-| Период | from | to |
-|--------|------|-----|
-| today | Начало сегодня 00:00 | Текущий момент |
-| yesterday | Вчера 00:00 | Сегодня 00:00 |
-| dayBeforeYesterday | Позавчера 00:00 | Вчера 00:00 |
-| week | Понедельник 00:00 | Текущий момент |
-| month | 1-е число месяца 00:00 | Текущий момент |
-| year | 1 января 00:00 | Текущий момент |
-
-**Числовые** (`periodByTime`):
-- Одна дата: `15.10.2022` → from = начало дня, to = начало следующего дня
-- Интервал: `01.10.2022-10.10.2022` → from/to с автоматической сортировкой
-
-Форматы дат: `DD.MM.YYYY` или `DD.MM.YY`.
-
----
-
-## База данных
-
-**Одна таблица** `statistics`:
-
-| Колонка | Тип | Назначение |
-|---------|------|-----------|
-| `statisticId` | Serial PK | ID записи |
-| `tgUserId` | varchar(255) | Telegram user ID |
-| `exercise` | varchar(255) | Ключ упражнения (`pullUp`, `benchPress`, ...) |
-| `count` | float8 | Количество повторений (для планки/бега — 1) |
-| `params` | jsonb | Доп. параметры: `{"weightKg": 80}`, `{"distanceM": 5000, "durationSec": 1500}` |
-| `createdAt` | timestamptz | Время записи (default: now()) |
-| `statusId` | integer | 1=active, soft delete через статус |
-
-ORM: **go-pg/v10**. Часть моделей и поисков сгенерирована через **mfd-generator**.
-
-Параметры в `params` хранятся в **базовых единицах**:
-- `weightKg` — всегда в килограммах (ввод `500г` → хранение `0.5`)
-- `distanceM` — всегда в метрах (ввод `5км` → хранение `5000`)
-- `durationSec` — всегда в секундах (ввод `25мин` → хранение `1500`)
-
-Для показа статистики используется **кастомный SQL** в `statistic_ext.go`:
-```sql
-SELECT "tgUserId", "exercise",
-    sum(count) as "sumCount",
-    count(*) as "sets",
-    (params->>'weightKg')::float8 as "weightKg",
-    (params->>'distanceM')::float8 as "distanceM",
-    sum((params->>'durationSec')::float8) as "sumDurationSec"
-FROM statistics
-WHERE ... (фильтры по user, exercises, periods)
-GROUP BY "tgUserId", "exercise", params->>'weightKg', params->>'distanceM'
-ORDER BY "exercise", "weightKg" DESC NULLS LAST, "distanceM" DESC NULLS LAST, "sumCount" DESC
+```bash
+make build
+make run
 ```
 
-NULL-значения в PostgreSQL GROUP BY группируются вместе, поэтому для обычных упражнений (без params) поведение идентично простому `GROUP BY exercise`.
+The bot will start listening for Telegram updates. Logs are written to `app.log`.
 
----
+## Usage
 
-## Конкурентность
+### Getting started
 
-`ListenAndHandle` запускает горутину на каждый апдейт, но ограничивает параллелизм **буферизованным каналом на 100 элементов** (семафор). Это защищает от перегрузки при большом потоке сообщений.
+Send `/start` to the bot — a keyboard with three buttons will appear: **Add**, **Show**, **Help**.
 
----
+All commands can be entered as text or via buttons.
 
-## Конфигурация
+### Adding exercises
 
-TOML-файл (`config/local.toml`):
-- `[Database]` — параметры подключения к PostgreSQL
-- `[Bot]` — Token, Name, ReplyFormat (markdown), Debug, Timeout (для long polling)
+Text format: `<command> <exercise> [parameters]`
 
----
+Commands: `add`, `сделал`, `добавь`
 
-## Запуск приложения
+**Examples:**
 
 ```
-main.go
-  │
-  ├─ Парсинг флагов и TOML-конфига
-  ├─ Создание логгера (embedlog)
-  ├─ Подключение к PostgreSQL (go-pg)
-  ├─ app.New() -> создание TG Bot API клиента
-  │              -> создание MessageHandler
-  ├─ go a.Run(ctx)  -> handler.ListenAndHandle()
-  │                      └─ Бесконечный цикл: читаем updates -> горутины
-  └─ Ожидание SIGTERM/SIGINT -> a.Shutdown()
-                                  ├─ StopReceivingUpdates()
-                                  └─ Close DB
+add pull-ups 15
+add bench press 80kg 10
+add jogging 5km 25min
+add plank 90sec
+add weight hold 40kg 30sec
+add squats 60kg 12
+add walking 3km
+add jogging 30min
 ```
 
----
+Parameters can be written together (`80kg`) or separately (`80 kg`). Supported units:
+- Weight: `kg`, `g`, `lbs` (`кг`, `г`)
+- Distance: `km`, `m` (`км`, `м`)
+- Time: `h`, `min`, `sec` (`ч`, `мин`, `сек`)
 
-## Важные детали для разработчика
+Compound time values are summed: `1h 30min` = 90 minutes.
 
-1. **Определение языка** — первым делом, до любой обработки. Если в тексте смешаны кириллица и латиница — бот ответит ошибкой.
+### Viewing statistics
 
-2. **Словарь — единственный источник "понимания"**. Чтобы бот распознавал новое слово, его нужно добавить в соответствующую `map` в `dictionary.go`.
+Text format: `<command> <exercises> [period]`
 
-3. **Категории упражнений** определяют, какие параметры обязательны. Новое упражнение без записи в `exerciseCategoryMap` автоматически считается `CategoryReps` (только повторения).
+Commands: `show`, `покажи`, `показать`
 
-4. **Упражнение хранится как внутренний ключ** (`pullUp`, `benchPress`), а не как введённый текст. Перевод обратно в человекочитаемый вид — через `exTextByLang`.
+**Examples:**
 
-5. **Soft delete** — записи не удаляются из БД, а помечаются `statusId`. Фильтр `StatusEnabledFilter` применяется автоматически.
+```
+show pull-ups for week
+show all for today
+show bench press squats for month
+show pull-ups for year
+show all
+```
 
-6. **Поле `params` (jsonb)** — хранит нормализованные доп. параметры (вес в кг, дистанция в м, время в сек). Для обычных упражнений — `NULL`.
+Periods: `today`, `yesterday`, `week`, `last week`, `week before last`, `month`, `last month`, `month before last`, `year`, `last year`, `year before last`. Without a period — all time.
 
-7. **`count` — float64**, не int. Для упражнений без явного количества (планка, бег) записывается `1`.
+Weekdays are also supported: `monday` (or `mon`), `tuesday` (or `tue`), `wednesday` (or `wed`), `thursday` (or `thu`), `friday` (or `fri`), `saturday` (or `sat`), `sunday` (or `sun`). If the weekday has already passed this week — shows that day this week; if not yet — shows that day last week; if today — shows from midnight to now.
 
-8. **Динамические колонки в таблице** — колонки вес/дистанция/время появляются в выводе только если хотя бы одно упражнение в результате имеет этот параметр. При отсутствии выводится `-`.
+Date formats are also supported: `15.03.2026` or a range `01.03.2026-15.03.2026`.
+
+Example output:
+
+```
+exercise        weight  count     sets
+pull-ups        -       22        2
+bench press     60kg    10        1
+bench press     80kg    18        2
+```
+
+### Help
+
+```
+help
+help add
+help show
+```
+
+### Button mode
+
+Press **Add** — the bot will offer a list of exercises to choose from, then step by step request parameters (weight, count, distance, time) depending on the exercise type.
+
+If you frequently do the same exercises, the bot will show **Quick-Add** buttons — add with one tap based on your history.
+
+After adding via buttons, the bot will show a hint with a ready-made text command for quick copying and reuse.
+
+## Supported exercises
+
+**Bodyweight:** pull-ups, push-ups, dips, abs, squats, lunges, burpee, skipping rope, hyperextension, leg raise, muscle-ups
+
+**Weighted:** bench press, deadlift, lat pulldown, leg press, preacher curl, shoulder press, bent-over row, dumbbell curl, leg extension, leg curl, seated row, chest fly, tricep pushdown, romanian deadlift, hip thrust, lateral raise, shrugs
+
+**Cardio:** jogging, walking
+
+**Timed:** plank, wall sit, hang, hollow hold, superman, side plank
+
+**Timed + weighted:** weight hold
+
+## Development
+
+```bash
+make test     # run tests
+make fmt      # format code
+make lint     # linter
+```
+
+Technical documentation: [docs/README.md](docs/README.md)

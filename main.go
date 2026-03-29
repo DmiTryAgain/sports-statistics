@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/DmiTryAgain/sports-statistics/app"
+	"github.com/DmiTryAgain/sports-statistics/pkg/app"
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 	"github.com/DmiTryAgain/sports-statistics/pkg/tg"
 
@@ -18,7 +17,7 @@ import (
 )
 
 var (
-	fs           = flag.NewFlagSetWithEnvPrefix(os.Args[0], "SELLERSRV", 0)
+	fs           = flag.NewFlagSetWithEnvPrefix(os.Args[0], "SPORTSTAT", 0)
 	flConfigPath = fs.String("config", "config/local.toml", "Path to config file")
 	flVerbose    = fs.Bool("verbose", false, "enable debug output")
 	flJSONLogs   = fs.Bool("json", false, "enable json output")
@@ -36,7 +35,7 @@ func main() {
 	}
 
 	// setup logger
-	sl, ctx := embedlog.NewLogger(*flVerbose, *flJSONLogs), context.Background()
+	sl := embedlog.NewLogger(*flVerbose, *flJSONLogs)
 	if *flDev {
 		sl = embedlog.NewDevLogger()
 	}
@@ -47,7 +46,7 @@ func main() {
 	dbc := db.New(dbconn)
 	v, err := dbc.Version()
 	exitOnError(err)
-	sl.Print(ctx, "connected to db", "version", v)
+	sl.Printf("connected to db, version=%s", v)
 
 	// log all sql queries
 	if *flDev {
@@ -59,11 +58,11 @@ func main() {
 		exitOnError(err)
 	}
 
-	sl.Print(ctx, "start application")
+	sl.Printf("start application")
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	go a.Run(ctx)
+	go a.Run()
 
 	<-quit
 	a.Shutdown()

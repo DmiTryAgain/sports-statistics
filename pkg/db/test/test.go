@@ -60,7 +60,7 @@ func setup() (*pg.DB, error) {
 	var (
 		pghost = getenv("PGHOST", "localhost")
 		pgport = getenv("PGPORT", "5432")
-		pgdb   = getenv("PGDATABASE", "test-apisrv")
+		pgdb   = getenv("PGDATABASE", "sport_statsrv")
 		pguser = getenv("PGUSER", "postgres")
 		pgpass = getenv("PGPASSWORD", "postgres")
 	)
@@ -73,7 +73,7 @@ func setup() (*pg.DB, error) {
 	}
 	conn := pg.Connect(cfg)
 
-	if r := getenv("DB_LOG_QUERY", "false"); r == "true" {
+	if r := getenv("DB_LOG_QUERY", "true"); r == "true" {
 		conn.AddQueryHook(testDBLogQuery{})
 	}
 
