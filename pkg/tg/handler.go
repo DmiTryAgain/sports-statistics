@@ -300,11 +300,12 @@ func parseValueWithUnit(word string, lang language) (ParsedValue, error) {
 }
 
 var (
-	errCountRequired      = errors.New("count required")
-	errWeightRequired     = errors.New("weight required")
-	errDistanceRequired   = errors.New("distance required")
-	errDurationRequired   = errors.New("duration required")
-	errDistOrTimeRequired = errors.New("distance or duration required")
+	errCountRequired       = errors.New("count required")
+	errWeightRequired      = errors.New("weight required")
+	errDistanceRequired    = errors.New("distance required")
+	errDurationRequired    = errors.New("duration required")
+	errDistOrTimeRequired  = errors.New("distance or duration required")
+	errCountOrTimeRequired = errors.New("count or duration required")
 )
 
 func (pp *ParsedParams) addParam(pt ParamType, val float64) {
@@ -409,6 +410,8 @@ func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang lan
 		return messagesByLang[lang][weightRequired]
 	case CategoryDistTime:
 		return messagesByLang[lang][distOrTimeRequired]
+	case CategoryRepsOrDuration:
+		return messagesByLang[lang][countOrTimeRequired]
 	case CategoryDuration:
 		return messagesByLang[lang][durationRequired]
 	case CategoryDurationWeight:
@@ -1300,7 +1303,9 @@ func nextUnfilledParam(exercise Exercise, params *ParsedParams, skipped map[Para
 			continue
 		}
 		if params.GetParam(sp) == nil {
-			optional := sp == ParamDuration && params.DistanceM != nil
+			optional := (sp == ParamDuration && params.DistanceM != nil) ||
+				(sp == ParamDuration && params.Count != nil) ||
+				(sp == ParamCount && params.DurationSec != nil)
 			return &nextStep{Param: sp, Optional: optional}
 		}
 	}
@@ -1356,6 +1361,8 @@ func (m *MessageHandler) showParamStepCB(ctx context.Context, cb *tgbotapi.Callb
 		var detail string
 		if session.Params.WeightKg != nil {
 			detail = " " + formatWeight(*session.Params.WeightKg, lang)
+		} else if session.Params.DurationSec != nil {
+			detail = " " + formatDuration(*session.Params.DurationSec, lang)
 		}
 		text := fmt.Sprintf(messagesByLang[lang][chooseCount], exName+detail) + "\n" + messagesByLang[lang][orWriteText]
 		m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, countInlineKeyboard(lang))
@@ -1377,6 +1384,8 @@ func (m *MessageHandler) showParamStepCB(ctx context.Context, cb *tgbotapi.Callb
 		var detail string
 		if session.Params.DistanceM != nil {
 			detail = " " + formatDistance(*session.Params.DistanceM, lang)
+		} else if session.Params.Count != nil {
+			detail = fmt.Sprintf(" %.0f", *session.Params.Count)
 		}
 		if step.Optional {
 			text := fmt.Sprintf(messagesByLang[lang][chooseOptionalDuration], exName) + "\n" + messagesByLang[lang][orWriteText]

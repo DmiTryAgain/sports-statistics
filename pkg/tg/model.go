@@ -17,6 +17,7 @@ const (
 	CategoryDistTime                               // дистанция и/или время (хотя бы одно)
 	CategoryDuration                               // только время (длительность)
 	CategoryDurationWeight                         // время + вес
+	CategoryRepsOrDuration                         // кол-во или время (хотя бы одно); вес опционален
 )
 
 // RequiredParams возвращает список безусловно обязательных типов параметров для категории
@@ -32,6 +33,8 @@ func (c ExerciseCategory) RequiredParams() []ParamType {
 		return []ParamType{ParamDuration}
 	case CategoryDurationWeight:
 		return []ParamType{ParamWeight, ParamDuration}
+	case CategoryRepsOrDuration:
+		return nil
 	default:
 		return nil
 	}
@@ -43,9 +46,18 @@ func (c ExerciseCategory) SoftRequiredParams() []ParamType {
 	switch c {
 	case CategoryDistTime:
 		return []ParamType{ParamDistance, ParamDuration}
+	case CategoryRepsOrDuration:
+		return []ParamType{ParamCount, ParamDuration}
 	default:
 		return nil
 	}
+}
+
+func (c ExerciseCategory) softRequiredError() error {
+	if c == CategoryRepsOrDuration {
+		return errCountOrTimeRequired
+	}
+	return errDistOrTimeRequired
 }
 
 // ValidateParams проверяет наличие всех обязательных параметров.
@@ -68,7 +80,7 @@ func (c ExerciseCategory) ValidateParams(pp *ParsedParams) error {
 			}
 		}
 		if !hasSome {
-			return errDistOrTimeRequired
+			return c.softRequiredError()
 		}
 	}
 
