@@ -60,6 +60,9 @@ const (
 	lateralRaiseEx     Exercise = "lateralRaise"
 	shrugEx            Exercise = "shrug"
 
+	legAdductorEx Exercise = "legAdductor"
+	calfRaiseEx   Exercise = "calfRaise"
+
 	allEx Exercise = "all"
 )
 
@@ -646,6 +649,55 @@ var (
 			"шраги со штангой":  shrugEx,
 			"шраги с гантелями": shrugEx,
 
+			// legAdductorEx
+			"сведение ног":      legAdductorEx,
+			"сведения ног":      legAdductorEx,
+			"сведенье ног":      legAdductorEx,
+			"свидение ног":      legAdductorEx,
+			"сведение бёдер":    legAdductorEx,
+			"сведение бедер":    legAdductorEx,
+			"сведение бёдра":    legAdductorEx,
+			"сведение бедра":    legAdductorEx,
+			"сведенье бёдер":    legAdductorEx,
+			"сведенье бедер":    legAdductorEx,
+			"приведение бедер":  legAdductorEx,
+			"приведение бёдер":  legAdductorEx,
+			"приведение бедра":  legAdductorEx,
+			"приведение бёдра":  legAdductorEx,
+			"привидение бедер":  legAdductorEx,
+			"привидение бёдер":  legAdductorEx,
+			"аддуктор":          legAdductorEx,
+			"адуктор":           legAdductorEx,
+			"аддукция":          legAdductorEx,
+			"адукция":           legAdductorEx,
+			"бабочка для ног":   legAdductorEx,
+			"бабочка ног":       legAdductorEx,
+			"бабачка для ног":   legAdductorEx,
+			"бабачка ног":       legAdductorEx,
+			"тренажер аддуктор": legAdductorEx,
+			"тренажёр аддуктор": legAdductorEx,
+			"трэнажер аддуктор": legAdductorEx,
+
+			// calfRaiseEx
+			"подъёмы на носки": calfRaiseEx,
+			"подъемы на носки": calfRaiseEx,
+			"падъёмы на носки": calfRaiseEx,
+			"падъемы на носки": calfRaiseEx,
+			"подьёмы на носки": calfRaiseEx,
+			"подьемы на носки": calfRaiseEx,
+			"подъём на носки":  calfRaiseEx,
+			"подъем на носки":  calfRaiseEx,
+			"падъём на носки":  calfRaiseEx,
+			"подъём на носок":  calfRaiseEx,
+			"подъем на носок":  calfRaiseEx,
+			"падъём на носок":  calfRaiseEx,
+			"ослик":            calfRaiseEx,
+			"ослек":            calfRaiseEx,
+			"икры":             calfRaiseEx,
+			"икра":             calfRaiseEx,
+			"икроножные":       calfRaiseEx,
+			"икраножные":       calfRaiseEx,
+
 			// all
 			"всё":            allEx,
 			"все":            allEx,
@@ -988,6 +1040,46 @@ var (
 			// shrugEx
 			"shrug":  shrugEx,
 			"shrugs": shrugEx,
+
+			// legAdductorEx
+			"leg adductor":        legAdductorEx,
+			"leg adductors":       legAdductorEx,
+			"adductor machine":    legAdductorEx,
+			"adductor machines":   legAdductorEx,
+			"adductor":            legAdductorEx,
+			"adductors":           legAdductorEx,
+			"aductor":             legAdductorEx,
+			"aductor machine":     legAdductorEx,
+			"inner thigh machine": legAdductorEx,
+			"inner thigh":         legAdductorEx,
+			"inner tight machine": legAdductorEx,
+			"inner tight":         legAdductorEx,
+			"hip adduction":       legAdductorEx,
+			"adduction":           legAdductorEx,
+			"hip adducton":        legAdductorEx,
+			"butterfly machine":   legAdductorEx,
+			"leg butterfly":       legAdductorEx,
+			"butterfly legs":      legAdductorEx,
+
+			// calfRaiseEx
+			"calf raises":          calfRaiseEx,
+			"calf raise":           calfRaiseEx,
+			"calf raize":           calfRaiseEx,
+			"calf raizes":          calfRaiseEx,
+			"calf raisses":         calfRaiseEx,
+			"calve raises":         calfRaiseEx,
+			"calves":               calfRaiseEx,
+			"calf":                 calfRaiseEx,
+			"calfs":                calfRaiseEx,
+			"donkey raises":        calfRaiseEx,
+			"donkey raise":         calfRaiseEx,
+			"donkey calf raise":    calfRaiseEx,
+			"donkey calf raises":   calfRaiseEx,
+			"donkey":               calfRaiseEx,
+			"standing calf raise":  calfRaiseEx,
+			"standing calf raises": calfRaiseEx,
+			"kalf raises":          calfRaiseEx,
+			"kalf raise":           calfRaiseEx,
 
 			// all
 			"all":        allEx,
@@ -1335,6 +1427,8 @@ var (
 			hipThrustEx:        "ягодичный мост",
 			lateralRaiseEx:     "махи гантелями",
 			shrugEx:            "шраги",
+			legAdductorEx:      "сведение ног",
+			calfRaiseEx:        "подъёмы на носки",
 		},
 		langEN: {
 			pullUpEx:           "pull-ups",
@@ -1374,6 +1468,8 @@ var (
 			hipThrustEx:        "hip thrust",
 			lateralRaiseEx:     "lateral raise",
 			shrugEx:            "shrugs",
+			legAdductorEx:      "leg adductor",
+			calfRaiseEx:        "calf raises",
 		},
 	}
 	periodTextByLang = map[language]map[textPeriod]string{
@@ -1449,6 +1545,7 @@ const (
 	durationRequired
 	distanceRequired
 	distOrTimeRequired
+	countOrTimeRequired
 	weightAndDurationRequired
 	paramInvalid
 	commonHelpMsg
@@ -1519,6 +1616,7 @@ var (
 			durationRequired:          "Для этого упражнения нужно указать время. Пример: планка 90сек",
 			distanceRequired:          "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
 			distOrTimeRequired:        "Нужно указать хотя бы дистанцию или время. Пример: бег 5км или бег 25мин",
+			countOrTimeRequired:       "Нужно указать хотя бы количество или время. Пример: подъёмы на носки 20 или подъёмы на носки 60сек",
 			weightAndDurationRequired: "Нужно указать вес и время. Пример: удержание 40кг 30сек",
 			paramInvalid:              "Не удалось распознать параметр: %s",
 			commonHelpMsg: "Привет! Я помогу вести статистику твоих спортивных упражнений.\n" +
@@ -1615,6 +1713,7 @@ var (
 			durationRequired:          "Duration is required for this exercise. Example: plank 90sec",
 			distanceRequired:          "Distance is required for this exercise. Example: run 5km 25min",
 			distOrTimeRequired:        "Distance or duration is required. Example: run 5km or run 25min",
+			countOrTimeRequired:       "Count or duration is required. Example: calf raises 20 or calf raises 60sec",
 			weightAndDurationRequired: "Weight and duration are required. Example: weight hold 40kg 30sec",
 			paramInvalid:              "Can't recognize parameter: %s",
 			commonHelpMsg: "Hi there! I can keep your training statistics.\n" +
@@ -1773,16 +1872,17 @@ var exerciseOrder = []Exercise{
 	benchPressEx, deadliftEx, legPressEx,
 
 	plankEx, lungeEx, muscleUpEx, burpeeEx,
-	skippingRopeEx, hyperextensionEx, legRaiseEx,
+	hyperextensionEx, legRaiseEx,
 	chestFlyEx, hangEx, shoulderPressEx,
 
 	bentOverRowEx, latPulldownEx, seatedRowEx,
 	dumbbellCurlEx, preacherCurlEx, tricepPushdownEx,
-	legExtensionEx, legCurlEx,
+	legExtensionEx, legCurlEx, legAdductorEx,
 	romanianDeadliftEx, hipThrustEx,
 
 	lateralRaiseEx, shrugEx, wallSitEx,
 	hollowHoldEx, supermanEx, sidePlankEx, weightHoldEx,
+	skippingRopeEx, calfRaiseEx,
 }
 
 const exercisesPerPage = 9 // количество кнопок упражнений на одной странице (3 ряда по 3)
@@ -1806,6 +1906,7 @@ var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 	hipThrustEx:        CategoryRepsWeight,
 	lateralRaiseEx:     CategoryRepsWeight,
 	shrugEx:            CategoryRepsWeight,
+	legAdductorEx:      CategoryRepsWeight,
 
 	// CategoryDistTime
 	joggingEx: CategoryDistTime,
@@ -1821,6 +1922,10 @@ var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 
 	// CategoryDurationWeight
 	weightHoldEx: CategoryDurationWeight,
+
+	// CategoryRepsOrDuration
+	skippingRopeEx: CategoryRepsOrDuration,
+	calfRaiseEx:    CategoryRepsOrDuration,
 }
 
 // exerciseOptionalParamsMap — необязательные параметры для конкретных упражнений
@@ -1842,6 +1947,10 @@ var exerciseOptionalParamsMap = map[Exercise][]ParamType{
 	// CategoryDistTime с опциональным весом
 	joggingEx: {ParamWeight},
 	walkingEx: {ParamWeight},
+
+	// CategoryRepsOrDuration с опциональным весом
+	skippingRopeEx: {ParamWeight},
+	calfRaiseEx:    {ParamWeight},
 }
 
 var unitSuffixByLang = map[language]map[string]UnitDef{
