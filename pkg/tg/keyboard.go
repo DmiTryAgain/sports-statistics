@@ -162,7 +162,7 @@ func distanceInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup {
 
 func durationInlineKeyboard(category ExerciseCategory, lang language) tgbotapi.InlineKeyboardMarkup {
 	durations := []float64{900, 1200, 1500, 1800, 2700, 3600}
-	if category == CategoryDuration {
+	if category == CategoryDuration || category == CategoryRepsOrDuration {
 		durations = []float64{30, 45, 60, 90, 120, 180}
 	}
 
@@ -224,48 +224,47 @@ func formatQuickAddButton(f db.FrequentExercise, lang language) string {
 		name = f.Exercise
 	}
 
-	cat := ex.Category()
-	switch cat {
-	case CategoryRepsWeight:
-		if f.Params != nil && f.Params.WeightKg != nil {
-			return fmt.Sprintf("%s %s ×%g", name, formatWeight(*f.Params.WeightKg, lang), f.Count)
-		}
-		return fmt.Sprintf("%s ×%g", name, f.Count)
-	case CategoryDistTime:
-		if f.Params != nil {
-			parts := name
-			if f.Params.DistanceM != nil {
-				parts += " " + formatDistance(*f.Params.DistanceM, lang)
-			}
-			if f.Params.DurationSec != nil {
-				parts += " " + formatDuration(*f.Params.DurationSec, lang)
-			}
-			return parts
-		}
-		return name
-	case CategoryDuration:
-		if f.Params != nil && f.Params.DurationSec != nil {
-			return fmt.Sprintf("%s %s", name, formatDuration(*f.Params.DurationSec, lang))
-		}
-		return name
-	case CategoryDurationWeight:
-		if f.Params != nil {
-			parts := name
-			if f.Params.WeightKg != nil {
-				parts += " " + formatWeight(*f.Params.WeightKg, lang)
-			}
-			if f.Params.DurationSec != nil {
-				parts += " " + formatDuration(*f.Params.DurationSec, lang)
-			}
-			return parts
-		}
-		return name
-	default:
-		if f.Params != nil && f.Params.WeightKg != nil {
-			return fmt.Sprintf("%s %s ×%g", name, formatWeight(*f.Params.WeightKg, lang), f.Count)
-		}
-		return fmt.Sprintf("%s ×%g", name, f.Count)
+	var weightKg, distanceM, durationSec *float64
+	if f.Params != nil {
+		weightKg, distanceM, durationSec = f.Params.WeightKg, f.Params.DistanceM, f.Params.DurationSec
 	}
+	showCount := f.Count > 1 || (durationSec == nil && distanceM == nil)
+
+	parts := name
+	if weightKg != nil {
+		parts += " " + formatWeight(*weightKg, lang)
+	}
+	if showCount {
+		parts += fmt.Sprintf(" ×%g", f.Count)
+	}
+	if distanceM != nil {
+		parts += " " + formatDistance(*distanceM, lang)
+	}
+	if durationSec != nil {
+		parts += " " + formatDuration(*durationSec, lang)
+	}
+	return parts
+}
+
+func confirmDetail(weightKg, distanceM, durationSec *float64, cnt float64, lang language) string {
+	if weightKg != nil && durationSec == nil && distanceM == nil {
+		return fmt.Sprintf("%s × %g", formatWeight(*weightKg, lang), cnt)
+	}
+	showCount := cnt > 1 || (durationSec == nil && distanceM == nil)
+	var parts []string
+	if weightKg != nil {
+		parts = append(parts, formatWeight(*weightKg, lang))
+	}
+	if showCount {
+		parts = append(parts, fmt.Sprintf("×%g", cnt))
+	}
+	if distanceM != nil {
+		parts = append(parts, formatDistance(*distanceM, lang))
+	}
+	if durationSec != nil {
+		parts = append(parts, formatDuration(*durationSec, lang))
+	}
+	return strings.Join(parts, " ")
 }
 
 func formatAddConfirmation(ex Exercise, cnt float64, params *db.StatisticParams, lang language) string {
@@ -273,50 +272,11 @@ func formatAddConfirmation(ex Exercise, cnt float64, params *db.StatisticParams,
 	if name == "" {
 		name = ex.String()
 	}
-
-	var detail string
-	cat := ex.Category()
-	switch cat {
-	case CategoryRepsWeight:
-		if params != nil && params.WeightKg != nil {
-			detail = fmt.Sprintf("%s × %g", formatWeight(*params.WeightKg, lang), cnt)
-		} else {
-			detail = fmt.Sprintf("×%g", cnt)
-		}
-	case CategoryDistTime:
-		if params != nil {
-			if params.DistanceM != nil {
-				detail = formatDistance(*params.DistanceM, lang)
-			}
-			if params.DurationSec != nil {
-				if detail != "" {
-					detail += " "
-				}
-				detail += formatDuration(*params.DurationSec, lang)
-			}
-		}
-	case CategoryDuration:
-		if params != nil && params.DurationSec != nil {
-			detail = formatDuration(*params.DurationSec, lang)
-		}
-	case CategoryDurationWeight:
-		if params != nil {
-			var parts []string
-			if params.WeightKg != nil {
-				parts = append(parts, formatWeight(*params.WeightKg, lang))
-			}
-			if params.DurationSec != nil {
-				parts = append(parts, formatDuration(*params.DurationSec, lang))
-			}
-			detail = strings.Join(parts, " ")
-		}
-	default:
-		detail = fmt.Sprintf("×%g", cnt)
-		if params != nil && params.WeightKg != nil {
-			detail = fmt.Sprintf("%s × %g", formatWeight(*params.WeightKg, lang), cnt)
-		}
+	var weightKg, distanceM, durationSec *float64
+	if params != nil {
+		weightKg, distanceM, durationSec = params.WeightKg, params.DistanceM, params.DurationSec
 	}
-
+	detail := confirmDetail(weightKg, distanceM, durationSec, cnt, lang)
 	confirm := fmt.Sprintf(messagesByLang[lang][addedConfirmation], name, detail)
 	quickCmd := formatQuickCopyCommand(ex, cnt, params, lang)
 	return confirm + "\n" + fmt.Sprintf(messagesByLang[lang][quickCopyHint], "`"+quickCmd+"`")
@@ -337,9 +297,7 @@ func formatQuickCopyCommand(ex Exercise, cnt float64, params *db.StatisticParams
 		parts = append(parts, formatWeight(*params.WeightKg, lang))
 	}
 
-	cat := ex.Category()
-	switch cat {
-	case CategoryReps, CategoryRepsWeight:
+	if cnt > 1 || params == nil || (params.DurationSec == nil && params.DistanceM == nil) {
 		parts = append(parts, strconv.FormatFloat(cnt, 'f', -1, 64))
 	}
 
@@ -391,7 +349,7 @@ func optionalDistanceInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup
 
 func optionalDurationInlineKeyboard(category ExerciseCategory, lang language) tgbotapi.InlineKeyboardMarkup {
 	durations := []float64{900, 1200, 1500, 1800, 2700, 3600}
-	if category == CategoryDuration || category == CategoryDurationWeight {
+	if category == CategoryDuration || category == CategoryDurationWeight || category == CategoryRepsOrDuration {
 		durations = []float64{30, 45, 60, 90, 120, 180}
 	}
 

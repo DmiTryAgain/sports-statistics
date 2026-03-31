@@ -401,7 +401,7 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string,
 		return "", err
 	}
 
-	return messagesByLang[lang][exAdded], nil
+	return formatAddConfirmation(ex, cnt, parsedParams.ToDBParams(), lang), nil
 }
 
 func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang language) string {
