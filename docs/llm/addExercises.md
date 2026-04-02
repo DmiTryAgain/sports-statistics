@@ -207,11 +207,24 @@ optional := (sp == ParamDuration && params.DistanceM != nil) ||
 
 Логика: параметр считается опциональным (с кнопкой «Пропустить»), если другой soft-required из пары уже заполнен.
 
-### 8. `pkg/tg/handler.go` — `showParamStepCB()` (только если новые soft-required)
+### 8. `pkg/tg/keyboard.go` — функции форматирования
+
+В `keyboard.go` одно место, где логика зависит от категории:
+
+**`durationInlineKeyboard` и `optionalDurationInlineKeyboard`** — выбирают набор кнопок времени (короткие 30–180с vs длинные 15–60мин). Добавить категорию в условие коротких значений, если упражнение предполагает секунды/минуты, а не часы:
+```go
+if category == CategoryDuration || category == CategoryRepsOrDuration {
+    durations = []float64{30, 45, 60, 90, 120, 180}
+}
+```
+
+Форматирование подтверждения (`formatAddConfirmation`), кнопки Quick-Add (`formatQuickAddButton`) и команды копирования (`formatQuickCopyCommand`) работают универсально: проверяют наличие каждого параметра (вес, дистанция, время) и выводят то, что есть. Категорию-специфичную логику добавлять не нужно — параметры уже провалидированы перед сохранением.
+
+### 9. `pkg/tg/handler.go` — `showParamStepCB()` (только если новые soft-required)
 
 Функция показывает шаг диалога. В `ParamCount` и `ParamDuration` есть блок `detail` — он добавляет к названию упражнения уже введённые параметры. Если в новой категории count и duration soft-required, этот блок уже покрывает их (добавлено при реализации `CategoryRepsOrDuration`). Если новая категория использует другие комбинации — дополнить аналогично.
 
-### 9. `pkg/tg/dictionary.go` — ключ и тексты сообщения
+### 10. `pkg/tg/dictionary.go` — ключ и тексты сообщения
 
 ```go
 // в iota-блоке констант ключей:
@@ -247,5 +260,6 @@ myNewRequired: "... is required. Example: exercise ...",
 - [ ] Case в `missingParamMessage()` в `handler.go`
 - [ ] Обновить `nextUnfilledParam()` в `handler.go` (если новые soft-required)
 - [ ] Обновить `showParamStepCB()` в `handler.go` (если нужно особое отображение шага)
+- [ ] Обновить `durationInlineKeyboard` и `optionalDurationInlineKeyboard` в `keyboard.go` (если категория использует короткие интервалы времени)
 - [ ] Ключ сообщения в iota и тексты RU+EN в `messagesByLang` в `dictionary.go`
 - [ ] Далее — стандартный чеклист добавления упражнения

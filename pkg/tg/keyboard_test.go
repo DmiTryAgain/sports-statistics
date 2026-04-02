@@ -447,6 +447,38 @@ func TestFormatAddConfirmation(t *testing.T) {
 				"add pull-ups 12", langEN,
 			),
 		},
+		{
+			name: "reps_or_duration count only ru",
+			ex:   calfRaiseEx,
+			cnt:  20,
+			lang: langRU,
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][calfRaiseEx], "×20"),
+				"добавь подъёмы на носки 20", langRU,
+			),
+		},
+		{
+			name:   "reps_or_duration duration only ru",
+			ex:     calfRaiseEx,
+			cnt:    1,
+			params: &db.StatisticParams{DurationSec: ptr[float64](60)},
+			lang:   langRU,
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][calfRaiseEx], "1мин"),
+				"добавь подъёмы на носки 1мин", langRU,
+			),
+		},
+		{
+			name:   "reps_or_duration count and weight ru",
+			ex:     skippingRopeEx,
+			cnt:    200,
+			params: &db.StatisticParams{WeightKg: ptr[float64](5)},
+			lang:   langRU,
+			want: withQuickHint(
+				fmt.Sprintf(messagesByLang[langRU][addedConfirmation], exTextByLang[langRU][skippingRopeEx], "5кг × 200"),
+				"добавь скакалка 5кг 200", langRU,
+			),
+		},
 	}
 
 	for _, tt := range tests {
@@ -521,6 +553,21 @@ func TestFormatQuickCopyCommand(t *testing.T) {
 			params: &db.StatisticParams{DistanceM: ptr[float64](3000)},
 			lang:   langEN,
 			want:   "add walking 3km",
+		},
+		{
+			name: "reps_or_duration count only ru",
+			ex:   calfRaiseEx,
+			cnt:  20,
+			lang: langRU,
+			want: "добавь подъёмы на носки 20",
+		},
+		{
+			name:   "reps_or_duration duration only ru",
+			ex:     calfRaiseEx,
+			cnt:    1,
+			params: &db.StatisticParams{DurationSec: ptr[float64](60)},
+			lang:   langRU,
+			want:   "добавь подъёмы на носки 1мин",
 		},
 	}
 
