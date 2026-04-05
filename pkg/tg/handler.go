@@ -120,16 +120,16 @@ func (m *MessageHandler) handleUpdate(upd tgbotapi.Update) {
 		return
 	}
 
-	if len(upd.Message.Text) > maxMessageLen {
-		m.sendMsg(upd, messagesByLang[langRU][msgTooLong])
-		return
-	}
-
 	lowerText := strings.ToLower(upd.Message.Text)
 	// Проверяем, что обращались вообще к нам
 	hasMention := m.hasBotMention(lowerText)
 	if !hasMention && upd.FromChat().IsGroup() {
 		return // Скипаем, если к нам не обращались или не писали нам в личку
+	}
+
+	if len(upd.Message.Text) > maxMessageLen {
+		m.sendMsg(upd, messagesByLang[langRU][msgTooLong])
+		return
 	}
 
 	// Достаём пользователя
