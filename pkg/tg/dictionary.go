@@ -60,8 +60,9 @@ const (
 	lateralRaiseEx     Exercise = "lateralRaise"
 	shrugEx            Exercise = "shrug"
 
-	legAdductorEx Exercise = "legAdductor"
-	calfRaiseEx   Exercise = "calfRaise"
+	legAdductorEx   Exercise = "legAdductor"
+	calfRaiseEx     Exercise = "calfRaise"
+	cablePulloverEx Exercise = "cablePullover"
 
 	allEx Exercise = "all"
 )
@@ -506,16 +507,36 @@ var (
 			"сгибания на бицепс":        dumbbellCurlEx,
 
 			// legExtensionEx
-			"разгибание ног":             legExtensionEx,
-			"разгибания ног":             legExtensionEx,
-			"разгибание ног в тренажёре": legExtensionEx,
-			"разгибание ног в тренажере": legExtensionEx,
+			"разгибание ног":                legExtensionEx,
+			"разгибания ног":                legExtensionEx,
+			"разгибание ног в тренажёре":    legExtensionEx,
+			"разгибание ног в тренажере":    legExtensionEx,
+			"разгибание ногами":             legExtensionEx,
+			"разгибания ногами":             legExtensionEx,
+			"разгибание ногами в тренажёре": legExtensionEx,
+			"разгибание ногами в тренажере": legExtensionEx,
+			"разгиб ног":                    legExtensionEx,
+			"разгиб ног в тренажёре":        legExtensionEx,
+			"разгиб ног в тренажере":        legExtensionEx,
+			"разгиб ногами":                 legExtensionEx,
+			"разгиб ногами в тренажёре":     legExtensionEx,
+			"разгиб ногами в тренажере":     legExtensionEx,
 
 			// legCurlEx
-			"сгибание ног":             legCurlEx,
-			"сгибания ног":             legCurlEx,
-			"сгибание ног в тренажёре": legCurlEx,
-			"сгибание ног в тренажере": legCurlEx,
+			"сгибание ног":                legCurlEx,
+			"сгибания ног":                legCurlEx,
+			"сгибание ног в тренажёре":    legCurlEx,
+			"сгибание ног в тренажере":    legCurlEx,
+			"сгиб ног":                    legCurlEx,
+			"сгиб ног в тренажёре":        legCurlEx,
+			"сгиб ног в тренажере":        legCurlEx,
+			"сгибание ногами":             legCurlEx,
+			"сгибания ногами":             legCurlEx,
+			"сгибание ногами в тренажёре": legCurlEx,
+			"сгибание ногами в тренажере": legCurlEx,
+			"сгиб ногами":                 legCurlEx,
+			"сгиб ногами в тренажёре":     legCurlEx,
+			"сгиб ногами в тренажере":     legCurlEx,
 
 			// seatedRowEx
 			"тяга нижнего блока":  seatedRowEx,
@@ -565,6 +586,7 @@ var (
 			// tricepPushdownEx
 			"разгибание на трицепс": tricepPushdownEx,
 			"разгибания на трицепс": tricepPushdownEx,
+			"разгиб на трицепс":     tricepPushdownEx,
 			"трицепс на блоке":      tricepPushdownEx,
 			"трицепс блок":          tricepPushdownEx,
 
@@ -697,6 +719,36 @@ var (
 			"икра":             calfRaiseEx,
 			"икроножные":       calfRaiseEx,
 			"икраножные":       calfRaiseEx,
+
+			// cablePulloverEx
+			"пулловер в блочном тренажере стоя": cablePulloverEx,
+			"пулловер в блочном тренажёре стоя": cablePulloverEx,
+			"пулловер в блочном тренажере":      cablePulloverEx,
+			"пулловер в блочном тренажёре":      cablePulloverEx,
+			"пулловер в блочном":                cablePulloverEx,
+			"пуловер в блочном тренажере стоя":  cablePulloverEx,
+			"пуловер в блочном тренажёре стоя":  cablePulloverEx,
+			"пуловер в блочном тренажере":       cablePulloverEx,
+			"пуловер в блочном тренажёре":       cablePulloverEx,
+			"пуловер в блочном":                 cablePulloverEx,
+			"пулловер на блоке стоя":            cablePulloverEx,
+			"пуловер на блоке стоя":             cablePulloverEx,
+			"пулловер на блоке":                 cablePulloverEx,
+			"пуловер на блоке":                  cablePulloverEx,
+			"пулловер стоя":                     cablePulloverEx,
+			"пуловер стоя":                      cablePulloverEx,
+			"пулловер в тренажере":              cablePulloverEx,
+			"пулловер в тренажёре":              cablePulloverEx,
+			"пуловер в тренажере":               cablePulloverEx,
+			"пуловер в тренажёре":               cablePulloverEx,
+			"пулловер блок":                     cablePulloverEx,
+			"пуловер блок":                      cablePulloverEx,
+			"пулловер":                          cablePulloverEx,
+			"пуловер":                           cablePulloverEx,
+			"пуллавер":                          cablePulloverEx,
+			"пулавер":                           cablePulloverEx,
+			"пуловера":                          cablePulloverEx,
+			"пулловера":                         cablePulloverEx,
 
 			// all
 			"всё":            allEx,
@@ -1081,6 +1133,19 @@ var (
 			"kalf raises":          calfRaiseEx,
 			"kalf raise":           calfRaiseEx,
 
+			// cablePulloverEx
+			"cable pullover":           cablePulloverEx,
+			"cable pullovers":          cablePulloverEx,
+			"cablepullover":            cablePulloverEx,
+			"standing cable pullover":  cablePulloverEx,
+			"standing cable pullovers": cablePulloverEx,
+			"pullover":                 cablePulloverEx,
+			"pullovers":                cablePulloverEx,
+			"cable pull over":          cablePulloverEx,
+			"cable pull overs":         cablePulloverEx,
+			"straight arm pulldown":    cablePulloverEx,
+			"straight arm pulldowns":   cablePulloverEx,
+
 			// all
 			"all":        allEx,
 			"everything": allEx,
@@ -1429,6 +1494,7 @@ var (
 			shrugEx:            "шраги",
 			legAdductorEx:      "сведение ног",
 			calfRaiseEx:        "подъёмы на носки",
+			cablePulloverEx:    "пулловер стоя",
 		},
 		langEN: {
 			pullUpEx:           "pull-ups",
@@ -1470,6 +1536,7 @@ var (
 			shrugEx:            "shrugs",
 			legAdductorEx:      "leg adductor",
 			calfRaiseEx:        "calf raises",
+			cablePulloverEx:    "cable pullover",
 		},
 	}
 	periodTextByLang = map[language]map[textPeriod]string{
@@ -1882,7 +1949,7 @@ var exerciseOrder = []Exercise{
 
 	lateralRaiseEx, shrugEx, wallSitEx,
 	hollowHoldEx, supermanEx, sidePlankEx, weightHoldEx,
-	skippingRopeEx, calfRaiseEx,
+	skippingRopeEx, calfRaiseEx, cablePulloverEx,
 }
 
 const exercisesPerPage = 9 // количество кнопок упражнений на одной странице (3 ряда по 3)
@@ -1907,6 +1974,7 @@ var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 	lateralRaiseEx:     CategoryRepsWeight,
 	shrugEx:            CategoryRepsWeight,
 	legAdductorEx:      CategoryRepsWeight,
+	cablePulloverEx:    CategoryRepsWeight,
 
 	// CategoryDistTime
 	joggingEx: CategoryDistTime,
