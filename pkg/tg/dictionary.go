@@ -577,9 +577,14 @@ var (
 			"подъем ног на перекладине":  hangingLegRaiseEx,
 			"подъёмы ног на перекладине": hangingLegRaiseEx,
 			"подъемы ног на перекладине": hangingLegRaiseEx,
+			"подъём ног к перекладине":   hangingLegRaiseEx,
+			"подъем ног к перекладине":   hangingLegRaiseEx,
+			"подъёмы ног к перекладине":  hangingLegRaiseEx,
+			"подъемы ног к перекладине":  hangingLegRaiseEx,
 			"ноги в висе":                hangingLegRaiseEx,
 			"ноги на турнике":            hangingLegRaiseEx,
 			"ноги на перекладине":        hangingLegRaiseEx,
+			"ноги к перекладине":         hangingLegRaiseEx,
 
 			// hangingKneeRaiseEx
 			"подъём коленей в висе":         hangingKneeRaiseEx,
