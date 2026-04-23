@@ -357,7 +357,7 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string,
 	lg := m.With("msg", rawMsg, "userID", tgUserID)
 	if rawMsg == "" {
 		lg.Print(ctx, "received empty message")
-		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+		return fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
 	words := strings.Split(rawMsg, " ")
@@ -366,7 +366,7 @@ func (m *MessageHandler) handleAdd(ctx context.Context, rawMsg, tgUserID string,
 	ex, found, position := m.extractExerciseAndItsPosition(words, lang)
 	if !found {
 		lg.Print(ctx, "received unknown exercise", "exercise", words[0])
-		return fmt.Sprintf("%s: %s. %s: %s", messagesByLang[lang][cantRecognizeEx], words[0], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+		return fmt.Sprintf("%s: %s. %s:\n%s", messagesByLang[lang][cantRecognizeEx], words[0], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
 	position++ // Нужно продолжить со следующего слова
@@ -424,14 +424,14 @@ func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang lan
 func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string, lang language) (res string, err error) {
 	if rawMsg == "" {
 		m.Print(ctx, "received empty message", "msg", rawMsg, "userID", tgUserID)
-		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+		return fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	}
 
 	// Парсим текст, находим упражнения и период
 	exercises, periodsFilter, invPeriods, err := m.parseRawMsgAsExercisesAndPeriods(ctx, rawMsg, lang)
 	if err != nil {
 		if errors.Is(err, errCantRecognizeEx) {
-			return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+			return fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 		}
 
 		return "", fmt.Errorf("parse raw message as exercises and periods, rawMsg=%s, err=%w", rawMsg, err)
@@ -915,7 +915,7 @@ func (m *MessageHandler) handleHelp(ctx context.Context, rawMsg string, lang lan
 		return fmt.Sprintf(messagesByLang[lang][commonHelpMsg], m.cfg.Name), nil
 	case addCmd:
 		return fmt.Sprintf(messagesByLang[lang][addHelpMsg], m.cfg.Name) +
-			fmt.Sprintf("%s: %s", messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+			fmt.Sprintf("%s:\n%s", messagesByLang[lang][listEx], allExTextByLang(lang)), nil
 	case showCmd:
 		return fmt.Sprintf(messagesByLang[lang][showHelpMsg], m.cfg.Name) +
 			fmt.Sprintf("%s: %s", messagesByLang[lang][listPeriod], allPeriodsByLang(lang)), nil
