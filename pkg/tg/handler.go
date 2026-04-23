@@ -530,37 +530,23 @@ func (m *MessageHandler) extractExerciseAndItsPosition(words []string, lang lang
 		return
 	}
 
-	multiwordExName := words[exIdx]
+	multiwordExName := words[0]
 
 	// Пробуем достать упражнение по первому слову
 	exercise, ok = exerciseByLang[lang][multiwordExName]
 
-	// Если оно было одно, его и вернём
-	if len(words) == 1 {
-		return
-	}
-
-	// Когда больше одного, сдвинемся до конца всех слов текущего упражнения
-	for len(words) > exIdx+1 {
-		multiwordExName = fmt.Sprintf("%s %s", multiwordExName, words[exIdx+1])
+	// Склеиваем слова и запоминаем самое длинное совпадение.
+	// Промежуточный префикс может не быть ключом ("подъём ног в" не ключ, а "подъём ног в висе" — ключ),
+	// поэтому продолжаем склеивать до конца, обновляя exIdx только на реальных совпадениях.
+	for i := 1; i < len(words); i++ {
+		multiwordExName = multiwordExName + " " + words[i]
 		multiwordEx, exists := exerciseByLang[lang][multiwordExName]
-
-		if exists {
-			// Более длинное совпадение всегда приоритетнее короткого
-			ok = true
-			exercise = multiwordEx
-			exIdx++
+		if !exists {
 			continue
 		}
-
-		if !ok {
-			// Ещё не находили упражнение — пробуем со следующим словом
-			exIdx++
-			continue
-		}
-
-		// Уже нашли упражнение ранее, а более длинное не найдено — останавливаемся
-		break
+		exercise = multiwordEx
+		ok = true
+		exIdx = i
 	}
 
 	return

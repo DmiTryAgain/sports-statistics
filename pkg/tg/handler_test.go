@@ -720,7 +720,7 @@ func TestMessageHandler_multiWordsEx(t *testing.T) {
 			lang:         langEN,
 			wantExercise: "",
 			wantOk:       false,
-			wantExIdx:    2,
+			wantExIdx:    0,
 		},
 	}
 	for _, tt := range tests {
