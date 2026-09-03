@@ -24,3 +24,5 @@ sportstat
 
 app.log
 app.err.log
+
+docs/llm/tasks/

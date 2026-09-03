@@ -164,42 +164,56 @@ func (m *MessageHandler) handleUpdate(upd tgbotapi.Update) {
 		return
 	}
 
-	text, err := m.handle(ctx, msgText, userID, lang)
+	texts, err := m.handle(ctx, msgText, userID, lang)
 	if err != nil { // В случае ошибки сообщаем об этом
-		text = messagesByLang[lang][errMsg]
+		texts = []string{messagesByLang[lang][errMsg]}
 		m.Error(ctx, "an error occurred", "rawMsg", upd.Message.Text, "userID", userID, "err", err.Error()) // И логируем её
 	}
 
-	m.sendMsg(upd, text)
+	m.sendMsg(upd, texts...)
 }
 
-// sendMsg Отправляет сообщение
-func (m *MessageHandler) sendMsg(upd tgbotapi.Update, text string) {
-	if text == "" {
-		return
-	}
+// sendMsg Отправляет тексты ответом на исходное сообщение
+func (m *MessageHandler) sendMsg(upd tgbotapi.Update, texts ...string) {
+	m.sendTexts(upd.Message.Chat.ID, upd.Message.MessageID, texts)
+}
 
-	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, text)
-	msg.ReplyToMessageID = upd.Message.MessageID
-	msg.ParseMode = m.cfg.ReplyFormat
-	if _, err := m.tgBot.Send(msg); err != nil {
-		// TODO: make retries
-		m.Errorf("failed to send message: %v", err)
+// sendTexts Отправляет тексты отдельными сообщениями по порядку, replyToID ставится только на первое.
+// Слишком длинный текст разбивается на несколько сообщений, при ошибке отправки остаток не отправляется
+func (m *MessageHandler) sendTexts(chatID int64, replyToID int, texts []string) {
+	for _, text := range texts {
+		for _, chunk := range splitMessage(text, sendMessageLimit) {
+			if chunk == "" {
+				continue
+			}
+			msg := tgbotapi.NewMessage(chatID, chunk)
+			if replyToID != 0 {
+				msg.ReplyToMessageID = replyToID
+				replyToID = 0
+			}
+			msg.ParseMode = m.cfg.ReplyFormat
+			if _, err := m.tgBot.Send(msg); err != nil {
+				// TODO: make retries
+				m.Errorf("failed to send message: %v", err)
+				return
+			}
+		}
 	}
 }
 
 // handle Обрабатывает сообщение. Определяет команду и обрабатывает остальной текст в соответствии с команлой
-func (m *MessageHandler) handle(ctx context.Context, msgText, userID string, lang language) (string, error) {
+func (m *MessageHandler) handle(ctx context.Context, msgText, userID string, lang language) ([]string, error) {
 	switch remainedText, c := m.detectCmd(msgText, lang); c {
 	case addCmd:
-		return m.handleAdd(ctx, remainedText, userID, lang)
+		text, err := m.handleAdd(ctx, remainedText, userID, lang)
+		return []string{text}, err
 	case showCmd:
 		return m.handleShow(ctx, remainedText, userID, lang)
 	case helpCmd:
-		return m.handleHelp(ctx, remainedText, lang)
+		return []string{m.handleHelp(ctx, remainedText, lang)}, nil
 	default:
 		m.Print(ctx, "received unknown command", "msg", msgText, "userID", userID)
-		return fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeCmd], messagesByLang[lang][listCmd], allCmdTextByLang(lang)), nil
+		return []string{fmt.Sprintf("%s. %s: %s", messagesByLang[lang][cantRecognizeCmd], messagesByLang[lang][listCmd], allCmdTextByLang(lang))}, nil
 	}
 }
 
@@ -421,25 +435,26 @@ func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang lan
 	}
 }
 
-func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string, lang language) (res string, err error) {
+func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string, lang language) ([]string, error) {
 	if rawMsg == "" {
 		m.Print(ctx, "received empty message", "msg", rawMsg, "userID", tgUserID)
-		return fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+		return []string{fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang))}, nil
 	}
 
 	// Парсим текст, находим упражнения и период
 	exercises, periodsFilter, invPeriods, err := m.parseRawMsgAsExercisesAndPeriods(ctx, rawMsg, lang)
 	if err != nil {
 		if errors.Is(err, errCantRecognizeEx) {
-			return fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+			return []string{fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][cantRecognizeEx], messagesByLang[lang][listEx], allExTextByLang(lang))}, nil
 		}
 
-		return "", fmt.Errorf("parse raw message as exercises and periods, rawMsg=%s, err=%w", rawMsg, err)
+		return nil, fmt.Errorf("parse raw message as exercises and periods, rawMsg=%s, err=%w", rawMsg, err)
 	}
 
 	// Сразу добавляем в результат нераспознаные периоды
+	var prefix string
 	if len(invPeriods) != 0 {
-		res += fmt.Sprintf("%s: %s\n", messagesByLang[lang][periodsInvalid], strings.Join(invPeriods, ", "))
+		prefix = fmt.Sprintf("%s: %s\n", messagesByLang[lang][periodsInvalid], strings.Join(invPeriods, ", "))
 	}
 
 	// Теперь идём за статистикой
@@ -452,22 +467,22 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 	}
 	stats, err := m.statRepo.GroupedStatisticByFilters(ctx, s)
 	if err != nil {
-		return "", fmt.Errorf("fetch statistic, err=%w", err)
+		return nil, fmt.Errorf("fetch statistic, err=%w", err)
 	}
 
 	// Если ничего нет, выходим
 	if len(stats) == 0 {
-		return res + messagesByLang[lang][nothingFound], nil
+		return []string{prefix + messagesByLang[lang][nothingFound]}, nil
 	}
 
-	table, err := m.buildTableByStat(ctx, stats, lang)
+	pages, err := m.buildTableByStat(ctx, stats, lang)
 	if err != nil {
-		return "", fmt.Errorf("build table by stat, err=%w", err)
+		return nil, fmt.Errorf("build table by stat, err=%w", err)
 	}
 
-	res += table
+	pages[0] = prefix + pages[0]
 
-	return res, nil
+	return pages, nil
 }
 
 // parseRawMsgAsExercisesAndPeriods Парсит воходное сообщение без знаков пунктуации.
@@ -827,10 +842,10 @@ func (m *MessageHandler) parseDate(date string) (time.Time, error) {
 	return parsed, nil
 }
 
-func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedStatistic, lang language) (string, error) {
+func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedStatistic, lang language) ([]string, error) {
 	if len(in) == 0 {
 		m.Print(ctx, "captured empty statistic list")
-		return "", nil
+		return nil, nil
 	}
 
 	tgStats := NewGroupedStatisticList(in, lang)
@@ -855,8 +870,6 @@ func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedSt
 
 	// Build rows
 	var b strings.Builder
-	b.WriteString("```\n")
-
 	wr := tabwriter.NewWriter(&b, 0, 1, 4, ' ', 0)
 	fmt.Fprintln(wr, header)
 
@@ -888,28 +901,29 @@ func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedSt
 	}
 
 	if err := wr.Flush(); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	b.WriteString("```")
-	return b.String(), nil
+	// Первая строка после выравнивания — заголовок, остальные — данные. Заголовок дублируется на каждой странице
+	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
+	return paginateTable(lines[0], lines[1:], sendMessageLimit), nil
 }
 
-func (m *MessageHandler) handleHelp(ctx context.Context, rawMsg string, lang language) (string, error) {
+func (m *MessageHandler) handleHelp(ctx context.Context, rawMsg string, lang language) string {
 	switch _, c := m.detectCmd(rawMsg, lang); c {
 	case unknownCmd:
-		return fmt.Sprintf(messagesByLang[lang][commonHelpMsg], m.cfg.Name), nil
+		return fmt.Sprintf(messagesByLang[lang][commonHelpMsg], m.cfg.Name)
 	case addCmd:
 		return fmt.Sprintf(messagesByLang[lang][addHelpMsg], m.cfg.Name) +
-			fmt.Sprintf("%s:\n%s", messagesByLang[lang][listEx], allExTextByLang(lang)), nil
+			fmt.Sprintf("%s:\n%s", messagesByLang[lang][listEx], allExTextByLang(lang))
 	case showCmd:
 		return fmt.Sprintf(messagesByLang[lang][showHelpMsg], m.cfg.Name) +
-			fmt.Sprintf("%s: %s", messagesByLang[lang][listPeriod], allPeriodsByLang(lang)), nil
+			fmt.Sprintf("%s: %s", messagesByLang[lang][listPeriod], allPeriodsByLang(lang))
 	case helpCmd:
-		return messagesByLang[lang][helpHelpMsg], nil
+		return messagesByLang[lang][helpHelpMsg]
 	default:
 		m.Print(ctx, "captured invalid command to show help", "msg", rawMsg, "command", c)
-		return fmt.Sprintf("`%s` %s", rawMsg, messagesByLang[lang][cmdNotSupported]), nil
+		return fmt.Sprintf("`%s` %s", rawMsg, messagesByLang[lang][cmdNotSupported])
 	}
 }
 
@@ -1227,14 +1241,15 @@ func (m *MessageHandler) handleCBShowPeriod(ctx context.Context, cb *tgbotapi.Ca
 		return
 	}
 
-	table, err := m.buildTableByStat(ctx, stats, session.Lang)
+	pages, err := m.buildTableByStat(ctx, stats, session.Lang)
 	if err != nil {
 		m.Error(ctx, "build table", "err", err)
 		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
 		return
 	}
 
-	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, table)
+	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, pages[0])
+	m.sendTexts(cb.Message.Chat.ID, 0, pages[1:])
 	m.answerCallback(cb.ID, "")
 	m.sessions.Delete(userID)
 }
@@ -1432,12 +1447,12 @@ func (m *MessageHandler) handleSessionText(ctx context.Context, upd tgbotapi.Upd
 
 	default:
 		// Нет обработки — fallback на обычную обработку
-		result, err := m.handle(ctx, text, userID, session.Lang)
+		results, err := m.handle(ctx, text, userID, session.Lang)
 		if err != nil {
 			m.sendMsg(upd, messagesByLang[session.Lang][errMsg])
 			m.Error(ctx, "session fallback handle", "err", err, "text", text, "user", userID, "session", session.String())
-		} else if result != "" {
-			m.sendMsg(upd, result)
+		} else {
+			m.sendMsg(upd, results...)
 		}
 	}
 }
@@ -1638,13 +1653,19 @@ func (m *MessageHandler) editMessageWithKeyboard(chatID int64, messageID int, te
 	}
 }
 
-// editMessageRemoveKeyboard редактирует сообщение, убирая кнопки
+// editMessageRemoveKeyboard редактирует сообщение, убирая кнопки.
+// Слишком длинный текст разбивается: первый кусок остаётся в редактируемом сообщении, остальные отправляются новыми
 func (m *MessageHandler) editMessageRemoveKeyboard(chatID int64, messageID int, text string) {
-	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+	chunks := splitMessage(text, sendMessageLimit)
+
+	edit := tgbotapi.NewEditMessageText(chatID, messageID, chunks[0])
 	edit.ParseMode = m.cfg.ReplyFormat
 	if _, err := m.tgBot.Send(edit); err != nil {
 		m.Errorf("failed to edit message: %v", err)
+		return
 	}
+
+	m.sendTexts(chatID, 0, chunks[1:])
 }
 
 func ptr[T any](t T) *T { return &t }
