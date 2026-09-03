@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
 
@@ -1221,5 +1222,40 @@ func TestMessageHandler_handleAdd(t *testing.T) {
 				t.Errorf("handleAdd() got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildTableByStatPaginated(t *testing.T) {
+	stats := make([]db.GroupedStatistic, 300)
+	for i := range stats {
+		w := float64(i)
+		stats[i] = db.GroupedStatistic{Exercise: "pullUp", SumCount: float64(100 + i), Sets: 5, WeightKg: &w}
+	}
+
+	pages, err := mh.buildTableByStat(context.Background(), stats, langRU)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) < 2 {
+		t.Fatalf("got %d pages, want at least 2", len(pages))
+	}
+
+	header := strings.Split(pages[0], "\n")[1]
+	var rows int
+	for i, p := range pages {
+		if runes := utf8.RuneCountInString(p); runes > sendMessageLimit {
+			t.Errorf("page %d has %d runes, want <= %d", i, runes, sendMessageLimit)
+		}
+		lines := strings.Split(p, "\n")
+		if lines[0] != "```" || lines[len(lines)-1] != "```" {
+			t.Errorf("page %d is not a fenced block", i)
+		}
+		if lines[1] != header {
+			t.Errorf("page %d header = %q, want %q", i, lines[1], header)
+		}
+		rows += len(lines) - 3
+	}
+	if rows != len(stats) {
+		t.Errorf("total data rows = %d, want %d", rows, len(stats))
 	}
 }
