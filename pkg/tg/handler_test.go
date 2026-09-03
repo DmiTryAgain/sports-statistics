@@ -1232,7 +1232,7 @@ func TestBuildTableByStatPaginated(t *testing.T) {
 		stats[i] = db.GroupedStatistic{Exercise: "pullUp", SumCount: float64(100 + i), Sets: 5, WeightKg: &w}
 	}
 
-	pages, err := mh.buildTableByStat(context.Background(), stats, langRU)
+	pages, err := mh.buildTableByStat(t.Context(), stats, langRU)
 	if err != nil {
 		t.Fatal(err)
 	}
