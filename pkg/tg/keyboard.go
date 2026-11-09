@@ -349,7 +349,7 @@ func optionalDistanceInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup
 
 func optionalDurationInlineKeyboard(category ExerciseCategory, lang language) tgbotapi.InlineKeyboardMarkup {
 	durations := []float64{900, 1200, 1500, 1800, 2700, 3600}
-	if category == CategoryDuration || category == CategoryDurationWeight || category == CategoryRepsOrDuration {
+	if category == CategoryReps || category == CategoryDuration || category == CategoryDurationWeight || category == CategoryRepsOrDuration {
 		durations = []float64{30, 45, 60, 90, 120, 180}
 	}
 

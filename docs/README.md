@@ -362,6 +362,7 @@ ReplyKeyboard "Показать"
 | `absEx` | пресс | abs | — |
 | `squatEx` | приседания | squats | да |
 | `lungeEx` | выпады | lunges | да |
+| `bulgarianSplitSquatEx` | болгарские выпады | bulgarian split squats | да (+ опц. время) |
 | `burpeeEx` | бёрпи | burpee | — |
 | `skippingRopeEx` | скакалка | skipping rope | — |
 | `hyperextensionEx` | гиперэкстензия | hyperextension | да |

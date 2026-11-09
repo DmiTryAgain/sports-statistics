@@ -234,6 +234,27 @@ func TestDurationInlineKeyboard_DistTime(t *testing.T) {
 	}
 }
 
+func TestOptionalDurationInlineKeyboard_Reps(t *testing.T) {
+	kb := optionalDurationInlineKeyboard(CategoryReps, langRU)
+
+	durButtons := 0
+	for _, row := range kb.InlineKeyboard {
+		for _, btn := range row {
+			if btn.CallbackData != nil && len(*btn.CallbackData) > 2 && (*btn.CallbackData)[:2] == "t|" {
+				durButtons++
+			}
+		}
+	}
+	if durButtons != 6 {
+		t.Errorf("expected 6 duration buttons for CategoryReps, got %d", durButtons)
+	}
+
+	// Опциональное время у упражнения на повторения измеряется секундами, а не часами
+	if kb.InlineKeyboard[0][0].Text != "30сек" {
+		t.Errorf("expected first duration text 30сек, got %s", kb.InlineKeyboard[0][0].Text)
+	}
+}
+
 func TestPeriodInlineKeyboard(t *testing.T) {
 	kb := periodInlineKeyboard(langRU)
 

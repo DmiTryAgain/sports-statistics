@@ -144,7 +144,7 @@ After adding via buttons, the bot will show a hint with a ready-made text comman
 
 ## Supported exercises
 
-**Bodyweight:** pull-ups, push-ups, dips, abs, squats, lunges, burpee, skipping rope, hyperextension, leg raise, muscle-ups
+**Bodyweight:** pull-ups, push-ups, dips, abs, squats, lunges, bulgarian split squats, burpee, skipping rope, hyperextension, leg raise, muscle-ups
 
 **Weighted:** bench press, deadlift, lat pulldown, leg press, preacher curl, shoulder press, bent-over row, dumbbell curl, leg extension, leg curl, seated row, chest fly, tricep pushdown, romanian deadlift, hip thrust, lateral raise, shrugs
 
