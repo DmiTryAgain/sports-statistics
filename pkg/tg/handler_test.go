@@ -716,6 +716,22 @@ func TestMessageHandler_multiWordsEx(t *testing.T) {
 			wantExIdx:    1,
 		},
 		{
+			name:         "multiword ex longer than single-word ex ru (болгарские выпады)",
+			words:        []string{"болгарские", "выпады", "10", "20кг"},
+			lang:         langRU,
+			wantExercise: bulgarianSplitSquatEx,
+			wantOk:       true,
+			wantExIdx:    1,
+		},
+		{
+			name:         "multiword ex longer than single-word ex en (bulgarian split squat)",
+			words:        []string{"bulgarian", "split", "squat", "10"},
+			lang:         langEN,
+			wantExercise: bulgarianSplitSquatEx,
+			wantOk:       true,
+			wantExIdx:    2,
+		},
+		{
 			name:         "no valid exercises",
 			words:        []string{"ahahahah", "invalid", "228"},
 			lang:         langEN,
@@ -737,6 +753,33 @@ func TestMessageHandler_multiWordsEx(t *testing.T) {
 				t.Errorf("extractExerciseAndItsPosition() gotExIdx = %v, want %v", gotExIdx, tt.wantExIdx)
 			}
 		})
+	}
+}
+
+func TestNextUnfilledParam_RepsWithOptionalWeightAndDuration(t *testing.T) {
+	params := &ParsedParams{}
+	skipped := map[ParamType]struct{}{}
+
+	step := nextUnfilledParam(bulgarianSplitSquatEx, params, skipped)
+	if step == nil || step.Param != ParamCount || step.Optional {
+		t.Fatalf("expected required count first, got %+v", step)
+	}
+
+	params.Count = ptr[float64](10)
+	step = nextUnfilledParam(bulgarianSplitSquatEx, params, skipped)
+	if step == nil || step.Param != ParamWeight || !step.Optional {
+		t.Fatalf("expected optional weight after count, got %+v", step)
+	}
+
+	skipped[ParamWeight] = struct{}{}
+	step = nextUnfilledParam(bulgarianSplitSquatEx, params, skipped)
+	if step == nil || step.Param != ParamDuration || !step.Optional {
+		t.Fatalf("expected optional duration after skipped weight, got %+v", step)
+	}
+
+	params.DurationSec = ptr[float64](45)
+	if step = nextUnfilledParam(bulgarianSplitSquatEx, params, skipped); step != nil {
+		t.Fatalf("expected no more steps, got %+v", step)
 	}
 }
 
@@ -871,6 +914,11 @@ func TestParseExerciseParams(t *testing.T) {
 			name:  "reps weight explicit count suffix",
 			words: []string{"80кг", "10раз"}, category: CategoryRepsWeight, lang: langRU,
 			wantCount: ptr[float64](10), wantWeight: ptr[float64](80),
+		},
+		{
+			name:  "reps with optional weight and duration",
+			words: []string{"10", "20кг", "45сек"}, category: CategoryReps, lang: langRU,
+			wantCount: ptr[float64](10), wantWeight: ptr[float64](20), wantDur: ptr[float64](45),
 		},
 		{
 			name:  "dist time composite",
