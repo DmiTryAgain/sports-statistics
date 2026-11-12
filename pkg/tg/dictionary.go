@@ -38,14 +38,16 @@ const (
 	joggingEx Exercise = "jogging"
 	walkingEx Exercise = "walking"
 
-	plankEx      Exercise = "plank"
-	wallSitEx    Exercise = "wallSit"
-	hangEx       Exercise = "hang"
-	hollowHoldEx Exercise = "hollowHold"
-	supermanEx   Exercise = "superman"
-	sidePlankEx  Exercise = "sidePlank"
-	lSitEx       Exercise = "lSit"
-	tuckHoldEx   Exercise = "tuckHold"
+	plankEx           Exercise = "plank"
+	wallSitEx         Exercise = "wallSit"
+	hangEx            Exercise = "hang"
+	hollowHoldEx      Exercise = "hollowHold"
+	supermanEx        Exercise = "superman"
+	sidePlankEx       Exercise = "sidePlank"
+	lSitEx            Exercise = "lSit"
+	hangingLSitEx     Exercise = "hangingLSit"
+	hangingTuckHoldEx Exercise = "hangingTuckHold"
+	tuckHoldEx        Exercise = "tuckHold"
 
 	weightHoldEx Exercise = "weightHold"
 
@@ -496,8 +498,6 @@ var (
 			"угалочек":               lSitEx,
 			"уголок на брусьях":      lSitEx,
 			"угалок на брусьях":      lSitEx,
-			"уголок на турнике":      lSitEx,
-			"угалок на турнике":      lSitEx,
 			"удержание прямых ног":   lSitEx,
 			"удержание ног прямыми":  lSitEx,
 			"удержание ног в уголке": lSitEx,
@@ -506,6 +506,31 @@ var (
 			"удиржание ног в уголке": lSitEx,
 			"удержание ног на весу":  lSitEx,
 			"удиржание ног на весу":  lSitEx,
+
+			// hangingLSitEx
+			"уголок в висе":                hangingLSitEx,
+			"уголка в висе":                hangingLSitEx,
+			"угалок в висе":                hangingLSitEx,
+			"угалка в висе":                hangingLSitEx,
+			"уголочек в висе":              hangingLSitEx,
+			"уголок в висе на турнике":     hangingLSitEx,
+			"уголок в висе на перекладине": hangingLSitEx,
+			"уголок на турнике":            hangingLSitEx,
+			"угалок на турнике":            hangingLSitEx,
+			"уголок на перекладине":        hangingLSitEx,
+			"угалок на перекладине":        hangingLSitEx,
+			"уголок вис":                   hangingLSitEx,
+			"вис уголок":                   hangingLSitEx,
+			"вис уголком":                  hangingLSitEx,
+			"вис в уголке":                 hangingLSitEx,
+			"вис с уголком":                hangingLSitEx,
+			"висячий уголок":               hangingLSitEx,
+			"удержание уголка в висе":      hangingLSitEx,
+			"удиржание уголка в висе":      hangingLSitEx,
+			"удержание ног в висе":         hangingLSitEx,
+			"удиржание ног в висе":         hangingLSitEx,
+			"удержание прямых ног в висе":  hangingLSitEx,
+			"удиржание прямых ног в висе":  hangingLSitEx,
 
 			// tuckHoldEx
 			"удержание согнутых коленей":  tuckHoldEx,
@@ -521,11 +546,35 @@ var (
 			"уголок с согнутыми коленями": tuckHoldEx,
 			"уголок согнутых коленей":     tuckHoldEx,
 			"угалок с согнутыми коленями": tuckHoldEx,
-			"согнутые колени на турнике":  tuckHoldEx,
 			"согнутые колени к груди":     tuckHoldEx,
 			"согнутые колени":             tuckHoldEx,
 			"тук":                         tuckHoldEx,
 			"тук холд":                    tuckHoldEx,
+
+			// hangingTuckHoldEx
+			"удержание согнутых коленей в висе":  hangingTuckHoldEx,
+			"удержание согнутых колен в висе":    hangingTuckHoldEx,
+			"удиржание согнутых коленей в висе":  hangingTuckHoldEx,
+			"удиржание согнутых колен в висе":    hangingTuckHoldEx,
+			"удержание коленей в висе":           hangingTuckHoldEx,
+			"удержание колен в висе":             hangingTuckHoldEx,
+			"удиржание коленей в висе":           hangingTuckHoldEx,
+			"удиржание колен в висе":             hangingTuckHoldEx,
+			"удержание коленей у груди в висе":   hangingTuckHoldEx,
+			"удержание колен у груди в висе":     hangingTuckHoldEx,
+			"согнутые колени в висе":             hangingTuckHoldEx,
+			"согнутые колени на турнике":         hangingTuckHoldEx,
+			"согнутые колени на перекладине":     hangingTuckHoldEx,
+			"вис с согнутыми коленями":           hangingTuckHoldEx,
+			"вис с согнутыми ногами":             hangingTuckHoldEx,
+			"вис с поджатыми коленями":           hangingTuckHoldEx,
+			"вис с поджатыми ногами":             hangingTuckHoldEx,
+			"вис в группировке":                  hangingTuckHoldEx,
+			"уголок с согнутыми коленями в висе": hangingTuckHoldEx,
+			"угалок с согнутыми коленями в висе": hangingTuckHoldEx,
+			"тук в висе":      hangingTuckHoldEx,
+			"тук холд в висе": hangingTuckHoldEx,
+			"тук на турнике":  hangingTuckHoldEx,
 
 			// hollowHoldEx
 			"лодочка": hollowHoldEx,
@@ -1332,13 +1381,46 @@ var (
 			"l-sit hold":          lSitEx,
 			"l sit hold":          lSitEx,
 			"lsit hold":           lSitEx,
-			"l-sit hold on bar":   lSitEx,
 			"straight leg hold":   lSitEx,
 			"straight legs hold":  lSitEx,
 			"straight-leg hold":   lSitEx,
 			"straight leg l-sit":  lSitEx,
 			"straight legs l-sit": lSitEx,
 			"l hold":              lSitEx,
+
+			// hangingLSitEx
+			"hanging l-sit":              hangingLSitEx,
+			"hanging l-sits":             hangingLSitEx,
+			"hanging l sit":              hangingLSitEx,
+			"hanging l sits":             hangingLSitEx,
+			"hanging lsit":               hangingLSitEx,
+			"hanging lsits":              hangingLSitEx,
+			"hanging l-sit hold":         hangingLSitEx,
+			"hanging l sit hold":         hangingLSitEx,
+			"hanging lsit hold":          hangingLSitEx,
+			"hanging l hold":             hangingLSitEx,
+			"l-sit hold on bar":          hangingLSitEx,
+			"l sit hold on bar":          hangingLSitEx,
+			"lsit hold on bar":           hangingLSitEx,
+			"l-sit on bar":               hangingLSitEx,
+			"l sit on bar":               hangingLSitEx,
+			"lsit on bar":                hangingLSitEx,
+			"l-sit on the bar":           hangingLSitEx,
+			"l sit on the bar":           hangingLSitEx,
+			"lsit on the bar":            hangingLSitEx,
+			"bar l-sit":                  hangingLSitEx,
+			"bar l sit":                  hangingLSitEx,
+			"bar lsit":                   hangingLSitEx,
+			"l-sit hang":                 hangingLSitEx,
+			"l sit hang":                 hangingLSitEx,
+			"lsit hang":                  hangingLSitEx,
+			"l-hang":                     hangingLSitEx,
+			"l hang":                     hangingLSitEx,
+			"lhang":                      hangingLSitEx,
+			"hanging straight leg hold":  hangingLSitEx,
+			"hanging straight legs hold": hangingLSitEx,
+			"hangin l sit":               hangingLSitEx,
+			"hangin lsit":                hangingLSitEx,
 
 			// tuckHoldEx
 			"tuck hold":           tuckHoldEx,
@@ -1362,6 +1444,36 @@ var (
 			"knees-to-chest hold": tuckHoldEx,
 			"knees to chest hold": tuckHoldEx,
 			"tuck knee hold":      tuckHoldEx,
+
+			// hangingTuckHoldEx
+			"hanging tuck hold":           hangingTuckHoldEx,
+			"hanging tuck holds":          hangingTuckHoldEx,
+			"hanging tuckhold":            hangingTuckHoldEx,
+			"hanging tuck":                hangingTuckHoldEx,
+			"hanging tucks":               hangingTuckHoldEx,
+			"hanging tuck l-sit":          hangingTuckHoldEx,
+			"hanging tuck l sit":          hangingTuckHoldEx,
+			"hanging tuck lsit":           hangingTuckHoldEx,
+			"hanging tucked l-sit":        hangingTuckHoldEx,
+			"hanging tucked l sit":        hangingTuckHoldEx,
+			"hanging tucked lsit":         hangingTuckHoldEx,
+			"hanging knee tuck hold":      hangingTuckHoldEx,
+			"hanging knee tuck":           hangingTuckHoldEx,
+			"hanging bent knee hold":      hangingTuckHoldEx,
+			"hanging bent-knee hold":      hangingTuckHoldEx,
+			"hanging knees to chest hold": hangingTuckHoldEx,
+			"hanging knees-to-chest hold": hangingTuckHoldEx,
+			"hanging knees to chest":      hangingTuckHoldEx,
+			"hanging knee hold":           hangingTuckHoldEx,
+			"tuck hold on bar":            hangingTuckHoldEx,
+			"tuck hold on the bar":        hangingTuckHoldEx,
+			"tuckhold on bar":             hangingTuckHoldEx,
+			"bar tuck hold":               hangingTuckHoldEx,
+			"bar tuck":                    hangingTuckHoldEx,
+			"tuck hang":                   hangingTuckHoldEx,
+			"tucked hang":                 hangingTuckHoldEx,
+			"hangin tuck hold":            hangingTuckHoldEx,
+			"hangin tuck":                 hangingTuckHoldEx,
 
 			// hollowHoldEx
 			"hollow hold":  hollowHoldEx,
@@ -1969,6 +2081,8 @@ var (
 			supermanEx:            "супермен",
 			sidePlankEx:           "боковая планка",
 			lSitEx:                "уголок",
+			hangingLSitEx:         "уголок в висе",
+			hangingTuckHoldEx:     "удержание согнутых коленей в висе",
 			tuckHoldEx:            "удержание согнутых коленей",
 			weightHoldEx:          "удержание веса",
 			benchPressEx:          "жим лёжа",
@@ -2020,6 +2134,8 @@ var (
 			supermanEx:            "superman",
 			sidePlankEx:           "side plank",
 			lSitEx:                "l-sit",
+			hangingLSitEx:         "hanging l-sit",
+			hangingTuckHoldEx:     "hanging tuck hold",
 			tuckHoldEx:            "tuck hold",
 			weightHoldEx:          "weight hold",
 			benchPressEx:          "bench press",
@@ -2457,7 +2573,7 @@ var exerciseOrder = []Exercise{
 	hollowHoldEx, supermanEx, sidePlankEx,
 	lSitEx, tuckHoldEx, weightHoldEx,
 	skippingRopeEx, calfRaiseEx, cablePulloverEx,
-	bulgarianSplitSquatEx,
+	bulgarianSplitSquatEx, hangingLSitEx, hangingTuckHoldEx,
 }
 
 const exercisesPerPage = 9 // количество кнопок упражнений на одной странице (3 ряда по 3)
@@ -2491,14 +2607,16 @@ var exerciseCategoryMap = map[Exercise]ExerciseCategory{
 	walkingEx: CategoryDistTime,
 
 	// CategoryDuration
-	plankEx:      CategoryDuration,
-	wallSitEx:    CategoryDuration,
-	hangEx:       CategoryDuration,
-	hollowHoldEx: CategoryDuration,
-	supermanEx:   CategoryDuration,
-	sidePlankEx:  CategoryDuration,
-	lSitEx:       CategoryDuration,
-	tuckHoldEx:   CategoryDuration,
+	plankEx:           CategoryDuration,
+	wallSitEx:         CategoryDuration,
+	hangEx:            CategoryDuration,
+	hollowHoldEx:      CategoryDuration,
+	supermanEx:        CategoryDuration,
+	sidePlankEx:       CategoryDuration,
+	lSitEx:            CategoryDuration,
+	hangingLSitEx:     CategoryDuration,
+	hangingTuckHoldEx: CategoryDuration,
+	tuckHoldEx:        CategoryDuration,
 
 	// CategoryDurationWeight
 	weightHoldEx: CategoryDurationWeight,
@@ -2523,12 +2641,14 @@ var exerciseOptionalParamsMap = map[Exercise][]ParamType{
 	bulgarianSplitSquatEx: {ParamWeight, ParamDuration},
 
 	// CategoryDuration с опциональным весом
-	plankEx:     {ParamWeight},
-	hangEx:      {ParamWeight},
-	wallSitEx:   {ParamWeight},
-	sidePlankEx: {ParamWeight},
-	lSitEx:      {ParamWeight},
-	tuckHoldEx:  {ParamWeight},
+	plankEx:           {ParamWeight},
+	hangEx:            {ParamWeight},
+	wallSitEx:         {ParamWeight},
+	sidePlankEx:       {ParamWeight},
+	lSitEx:            {ParamWeight},
+	hangingLSitEx:     {ParamWeight},
+	hangingTuckHoldEx: {ParamWeight},
+	tuckHoldEx:        {ParamWeight},
 
 	// CategoryDistTime с опциональным весом
 	joggingEx: {ParamWeight},
