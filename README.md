@@ -150,7 +150,7 @@ After adding via buttons, the bot will show a hint with a ready-made text comman
 
 **Cardio:** jogging, walking
 
-**Timed:** plank, wall sit, hang, hollow hold, superman, side plank
+**Timed:** plank, wall sit, hang, hanging l-sit, hanging tuck hold, hollow hold, superman, side plank
 
 **Timed + weighted:** weight hold
 

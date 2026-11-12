@@ -407,6 +407,8 @@ ReplyKeyboard "Показать"
 | `hollowHoldEx` | лодочка | hollow hold | — |
 | `supermanEx` | супермен | superman | — |
 | `sidePlankEx` | боковая планка | side plank | да |
+| `hangingLSitEx` | уголок в висе | hanging l-sit | да |
+| `hangingTuckHoldEx` | удержание согнутых коленей в висе | hanging tuck hold | да |
 
 ### Время + вес (CategoryDurationWeight)
 
