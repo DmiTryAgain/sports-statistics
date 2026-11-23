@@ -1,7 +1,7 @@
 # zenrpc-middleware: Middlewares for vmkteam/zenrpc
 
 [![Linter Status](https://github.com/vmkteam/zenrpc-middleware/actions/workflows/golangci-lint.yml/badge.svg?branch=master)](https://github.com/vmkteam/zenrpc-middleware/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/vmkteam/zenrpc-middleware)](https://goreportcard.com/report/github.com/vmkteam/zenrpc-middleware) [![Go Reference](https://pkg.go.dev/badge/github.com/vmkteam/zenrpc-middleware.svg)](https://pkg.go.dev/github.com/vmkteam/zenrpc-middleware)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vmkteam/zenrpc-middleware)](https://goreportcard.com/report/github.com/vmkteam/zenrpc-middleware)
 [![Go Reference](https://pkg.go.dev/badge/github.com/vmkteam/zenrpc-middleware.svg)](https://pkg.go.dev/github.com/vmkteam/zenrpc-middleware)
 
 `zenrpc-middleware` is a set of common middlewares for [zenrpc](https://github.com/vmkteam/zenrpc) implementing logging,
@@ -31,8 +31,12 @@ Logs via slog.InfoContext (or similar) function all requests with custom attrs s
 
 ### WithSentry
 
-Sets additional parameters for current Sentry scope. Extras: params, duration, ip. Tags: platform,
+Sets additional parameters for current Sentry scope. Context "rpc": params, duration, ip. Tags: platform,
 version, method.
+
+Recovers a panic in a handler, reports it to Sentry and answers with JSON-RPC error `-32603` (Internal error). Put
+`WithErrorLogger` and `WithErrorSLog` after `WithSentry` in `rpc.Use`, as in the example below: placed before it, they
+see that error too and report the same panic to Sentry a second time.
 
 ### WithNoCancelContext
 
@@ -40,9 +44,9 @@ Ignores Cancel func from context. This is useful for passing context to `go-pg`.
 
 ### WithMetrics
 
-Logs duration of RPC requests via Prometheus. Default AppName is zenrpc. It exposes two
-metrics: `appName_rpc_error_requests_count` and `appName_rpc_responses_duration_seconds`. Labels: method, code,
-platform, version.
+Logs duration of RPC requests via Prometheus. Default serverName is rpc (will be in server label).
+It exposes two metrics: `app_rpc_error_requests_total` and `app_rpc_responses_duration_seconds`.
+Labels: method, code, platform, version, server.
 
 ### WithTiming
 
@@ -78,30 +82,6 @@ sensitive error data from response. It is good to use pkg/errors for stack trace
 ### WithErrorSLog
 
 Same as `WithErrorLogger`, but for slog.
-
-### XRequestID
-
-Handler for adding `X-Request-ID` header to all requests and responses.
-
-```go
-	s := http.NewServer(middleware.XRequestID(http.HandlerFunc(rpc.ServeHTTP)))
-```
-
-### EchoIPContext
-
-Echo middleware for adding client IP info to context for zenrpc middleware
-
-```go
-    e.Use(middleware.EchoIPContext())
-```
-
-### EchoSentryHubContext
-
-Echo middleware for adding sentry hub info to context for zenrpc middleware
-
-```go
-    e.Use(middleware.EchoSentryHubContext())
-```
 
 ## Examples
 
@@ -156,29 +136,3 @@ func main() {
     // rpc.Register and server
 ```
 
-### Handler snippets
-
-```go
-// sentry init
-sentry.Init(sentry.ClientOptions{
-    Dsn:         cfg.Sentry.DSN,
-    Environment: cfg.Sentry.Environment,
-    Release:     version,
-}
-
-// sentry middleware for Echo
-e.Use(sentryecho.New(sentryecho.Options{
-    Repanic:         true,
-    WaitForDelivery: true,
-}))
-
-// register handler
-a.echo.Any("/v1/rpc/", middleware.EchoHandler(rpc))
-
----  OR ---
-
-e.Use(middleware.EchoIPContext()), middleware.EchoSentryHubContext())
-// register handler
-e.Any("/int/rpc/", echo.WrapHandler(XRequestID(rpc)))
-
-```

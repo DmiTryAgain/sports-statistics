@@ -9,7 +9,7 @@ Telegram-бот для учёта спортивных упражнений. П�
 
 ## Требования
 
-- Go 1.24+
+- Go 1.27+
 - PostgreSQL
 - Telegram Bot Token (получить у [@BotFather](https://t.me/BotFather))
 

@@ -31,7 +31,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24.x'
+        go-version: '1.27.x'
 
     - name: Prepare test db
       run: psql -d postgresql://postgres@localhost/sport_statsrv < schema.sql
@@ -50,7 +50,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24.x'
+        go-version: '1.27.x'
 
     - name: Build
       run: go build -mod=vendor -o sportstat main.go

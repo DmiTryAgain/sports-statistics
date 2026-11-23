@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -959,14 +960,12 @@ func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedSt
 	}
 
 	msgs := messagesByLang[lang]
-	cols := []tableColumn{{header: msgs[tableExCol], cells: exercises}}
-	cols = append(cols, paramColumns(params, lang)...)
-	cols = append(cols,
-		tableColumn{header: msgs[tableCntCol], cells: counts},
-		tableColumn{header: msgs[tableSetCol], cells: sets},
-	)
 
-	return renderTable(cols)
+	return renderTable(slices.Concat(
+		[]tableColumn{{header: msgs[tableExCol], cells: exercises}},
+		paramColumns(params, lang),
+		[]tableColumn{{header: msgs[tableCntCol], cells: counts}, {header: msgs[tableSetCol], cells: sets}},
+	))
 }
 
 // buildTableByRawStat Собирает страницы таблицы записей как есть: по строке на запись с датой её добавления
@@ -987,14 +986,12 @@ func (m *MessageHandler) buildTableByRawStat(in []db.Statistic, lang language) (
 	}
 
 	msgs := messagesByLang[lang]
-	cols := []tableColumn{
-		{header: msgs[tableDateCol], cells: dates},
-		{header: msgs[tableExCol], cells: exercises},
-	}
-	cols = append(cols, paramColumns(params, lang)...)
-	cols = append(cols, tableColumn{header: msgs[tableCntCol], cells: counts})
 
-	return renderTable(cols)
+	return renderTable(slices.Concat(
+		[]tableColumn{{header: msgs[tableDateCol], cells: dates}, {header: msgs[tableExCol], cells: exercises}},
+		paramColumns(params, lang),
+		[]tableColumn{{header: msgs[tableCntCol], cells: counts}},
+	))
 }
 
 // renderTable Выравнивает колонки и разбивает таблицу на страницы, заголовок дублируется на каждой

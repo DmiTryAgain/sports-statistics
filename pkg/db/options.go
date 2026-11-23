@@ -9,6 +9,8 @@ import (
 	"github.com/go-pg/urlstruct"
 )
 
+const statusField = "statusId"
+
 const (
 	// common statuses
 	StatusEnabled = iota + 1
@@ -17,8 +19,8 @@ const (
 )
 
 var (
-	StatusFilter        = Filter{Field: "statusId", Value: []int{StatusEnabled, StatusDisabled}, SearchType: SearchTypeArray}
-	StatusEnabledFilter = Filter{Field: "statusId", Value: []int{StatusEnabled}, SearchType: SearchTypeArray}
+	StatusFilter        = Filter{Field: statusField, Value: []int{StatusEnabled, StatusDisabled}, SearchType: SearchTypeArray}
+	StatusEnabledFilter = Filter{Field: statusField, Value: []int{StatusEnabled}, SearchType: SearchTypeArray}
 )
 
 type SortDirection string
@@ -100,7 +102,7 @@ func WithRelations(rels ...string) OpFunc {
 // EnabledOnly is a function that adds "statusId"=1 filter to query.
 func EnabledOnly() OpFunc {
 	return func(query *orm.Query) {
-		Filter{Field: "statusId", Value: StatusEnabled}.Apply(query)
+		Filter{Field: statusField, Value: StatusEnabled}.Apply(query)
 	}
 }
 

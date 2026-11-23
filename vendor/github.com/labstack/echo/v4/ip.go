@@ -24,7 +24,8 @@ To retrieve IP address reliably/securely, you must let your application be aware
 In Echo, this can be done by configuring `Echo#IPExtractor` appropriately.
 This guides show you why and how.
 
-> Note: if you don't set `Echo#IPExtractor` explicitly, Echo fallback to legacy behavior, which is not a good choice.
+> Note: if you don't set `Echo#IPExtractor` explicitly, Echo uses the connection peer and ignores forwarding headers.
+> Applications behind proxies must configure a trusted proxy extractor to recover individual client addresses.
 
 Let's start from two questions to know the right direction:
 
@@ -114,10 +115,10 @@ To control this behavior, use [`TrustOption`](https://godoc.org/github.com/labst
 
 ## About default behavior
 
-In default behavior, Echo sees all of first XFF header, X-Real-IP header and IP from network layer.
-
-As you might already notice, after reading this article, this is not good.
-Sole reason this is default is just backward compatibility.
+By default, Echo uses the connection peer from req.RemoteAddr and ignores X-Forwarded-For and X-Real-IP.
+This prevents clients from choosing their own identity for rate limiting, access control, or proxy forwarding.
+Behind a proxy, all clients share that proxy's address unless Echo#IPExtractor is configured.
+Configure a header extractor with trust options limited to your own proxies before relying on individual client IPs.
 
 ## Private IP ranges
 
@@ -179,16 +180,6 @@ func newIPChecker(configs []TrustOption) *ipChecker {
 	return checker
 }
 
-// Go1.16+ added `ip.IsPrivate()` but until that use this implementation
-func isPrivateIPRange(ip net.IP) bool {
-	if ip4 := ip.To4(); ip4 != nil {
-		return ip4[0] == 10 ||
-			ip4[0] == 172 && ip4[1]&0xf0 == 16 ||
-			ip4[0] == 192 && ip4[1] == 168
-	}
-	return len(ip) == net.IPv6len && ip[0]&0xfe == 0xfc
-}
-
 func (c *ipChecker) trust(ip net.IP) bool {
 	if c.trustLoopback && ip.IsLoopback() {
 		return true
@@ -196,7 +187,7 @@ func (c *ipChecker) trust(ip net.IP) bool {
 	if c.trustLinkLocal && ip.IsLinkLocalUnicast() {
 		return true
 	}
-	if c.trustPrivateNet && isPrivateIPRange(ip) {
+	if c.trustPrivateNet && ip.IsPrivate() {
 		return true
 	}
 	for _, trustedRange := range c.trustExtraRanges {
@@ -219,8 +210,22 @@ func ExtractIPDirect() IPExtractor {
 }
 
 func extractIP(req *http.Request) string {
-	ra, _, _ := net.SplitHostPort(req.RemoteAddr)
-	return ra
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		host = req.RemoteAddr
+	}
+	host = stripIPv6Zone(host)
+	if err != nil && net.ParseIP(host) == nil {
+		return ""
+	}
+	return host
+}
+
+func stripIPv6Zone(host string) string {
+	if strings.Contains(host, ":") {
+		host, _, _ = strings.Cut(host, "%")
+	}
+	return host
 }
 
 // ExtractIPFromRealIPHeader extracts IP address using x-real-ip header.

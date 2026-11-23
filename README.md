@@ -9,7 +9,7 @@ The bot allows you to:
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.27+
 - PostgreSQL
 - Telegram Bot Token (get one from [@BotFather](https://t.me/BotFather))
 
