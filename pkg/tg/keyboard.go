@@ -201,6 +201,16 @@ func periodInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
+func groupingInlineKeyboard(lang language) tgbotapi.InlineKeyboardMarkup {
+	row := make([]tgbotapi.InlineKeyboardButton, 0, len(groupingOrder))
+	for _, g := range groupingOrder {
+		data := encodeCallbackData("sg", string(g))
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(groupingTextByLang[lang][g], data))
+	}
+
+	return tgbotapi.NewInlineKeyboardMarkup(row, cancelRow(lang))
+}
+
 func quickAddInlineKeyboard(frequent []db.FrequentExercise, lang language) [][]tgbotapi.InlineKeyboardButton {
 	if len(frequent) == 0 {
 		return nil

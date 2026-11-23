@@ -18,6 +18,12 @@ import (
 
 const maxMessageLen = 500
 
+// maxRawStatRows Сколько последних записей выводится без группировки.
+// Без ограничения длинная история уходила бы десятками сообщений подряд
+const maxRawStatRows = 300
+
+const statDateLayout = "02.01.2006 15:04"
+
 var (
 	errCantDetectLang  = errors.New("can't detect language")
 	errCantRecognizeEx = errors.New("can't recognize the exercise")
@@ -48,6 +54,9 @@ type MessageHandler struct {
 	cfg       Bot
 	sessions  *SessionStore
 	rateLimit *rateLimiter
+
+	// loc Часовой пояс, в котором считаются границы периодов и выводятся даты записей
+	loc *time.Location
 }
 
 func New(shutdownCtx context.Context, logger embedlog.Logger, db db.DB, statRepo db.StatisticRepo, tgBot *tgbotapi.BotAPI, cfg Bot) *MessageHandler {
@@ -59,6 +68,10 @@ func New(shutdownCtx context.Context, logger embedlog.Logger, db db.DB, statRepo
 		statRepo:  statRepo,
 		sessions:  NewSessionStore(shutdownCtx),
 		rateLimit: newRateLimiter(shutdownCtx),
+		loc:       cfg.TimeZone.Location,
+	}
+	if h.loc == nil {
+		h.loc = time.Local
 	}
 
 	return h
@@ -436,6 +449,7 @@ func (m *MessageHandler) missingParamMessage(category ExerciseCategory, lang lan
 }
 
 func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string, lang language) ([]string, error) {
+	rawMsg, grouping := extractGrouping(rawMsg, lang)
 	if rawMsg == "" {
 		m.Print(ctx, "received empty message", "msg", rawMsg, "userID", tgUserID)
 		return []string{fmt.Sprintf("%s. %s:\n%s", messagesByLang[lang][emptyEx], messagesByLang[lang][listEx], allExTextByLang(lang))}, nil
@@ -458,31 +472,110 @@ func (m *MessageHandler) handleShow(ctx context.Context, rawMsg, tgUserID string
 	}
 
 	// Теперь идём за статистикой
-	s := db.GroupedStatisticSearch{
-		StatisticSearch: db.StatisticSearch{
-			TgUserID:  &tgUserID,
-			Exercises: exercises.StringSlice(),
-		},
-		Periods: periodsFilter.ToDB(),
-	}
-	stats, err := m.statRepo.GroupedStatisticByFilters(ctx, s)
+	pages, err := m.statPages(ctx, tgUserID, exercises, periodsFilter, grouping, lang)
 	if err != nil {
-		return nil, fmt.Errorf("fetch statistic, err=%w", err)
+		return nil, err
 	}
 
 	// Если ничего нет, выходим
-	if len(stats) == 0 {
+	if len(pages) == 0 {
 		return []string{prefix + messagesByLang[lang][nothingFound]}, nil
-	}
-
-	pages, err := m.buildTableByStat(ctx, stats, lang)
-	if err != nil {
-		return nil, fmt.Errorf("build table by stat, err=%w", err)
 	}
 
 	pages[0] = prefix + pages[0]
 
 	return pages, nil
+}
+
+// extractGrouping Отрезает от конца запроса статистики фразы о группировке и возвращает запрос без них.
+// Просьба сгруппировать без уточнения, по чему именно, включает группировку по умолчанию.
+// Отрицание перед любой из фраз отменяет группировку, что бы ни было сказано в остальных
+func extractGrouping(rawMsg string, lang language) (cleaned string, grouping statGrouping) {
+	words := strings.Split(rawMsg, " ")
+	grouping = noGrouping
+
+	var named, negated bool
+	for {
+		if rest, g, ok := cutTrailingPhrase(words, groupingByLang[lang]); ok {
+			words, grouping, named = rest, g, true
+		} else if rest, _, ok := cutTrailingPhrase(words, groupingWordByLang[lang]); ok {
+			words = rest
+			if !named {
+				grouping = defaultGrouping
+			}
+		} else {
+			break
+		}
+
+		if rest, _, ok := cutTrailingPhrase(words, groupingNegationByLang[lang]); ok {
+			words, negated = rest, true
+		}
+	}
+
+	if negated {
+		grouping = noGrouping
+	}
+
+	return strings.Join(words, " "), grouping
+}
+
+// cutTrailingPhrase Ищет в конце слов самую длинную фразу из словаря и возвращает слова без неё и значение фразы
+func cutTrailingPhrase[T any](words []string, dict map[string]T) (rest []string, val T, ok bool) {
+	rest = words
+
+	var phrase string
+	for i := len(words) - 1; i >= 0; i-- {
+		phrase = strings.TrimSpace(words[i] + " " + phrase)
+		if v, found := dict[phrase]; found {
+			rest, val, ok = words[:i], v, true
+		}
+	}
+
+	return rest, val, ok
+}
+
+// statPages Достаёт статистику пользователя и собирает из неё страницы таблицы. Если записей нет, страниц тоже нет
+func (m *MessageHandler) statPages(ctx context.Context, tgUserID string, exercises Exercises, ps periods, grouping statGrouping, lang language) ([]string, error) {
+	search := db.StatisticSearch{
+		TgUserID:  &tgUserID,
+		Exercises: exercises.StringSlice(),
+	}
+
+	switch grouping {
+	case exerciseGrouping:
+		stats, err := m.statRepo.GroupedStatisticByFilters(ctx, db.GroupedStatisticSearch{StatisticSearch: search, Periods: ps.ToDB()})
+		if err != nil {
+			return nil, fmt.Errorf("fetch grouped statistic, err=%w", err)
+		}
+		if len(stats) == 0 {
+			return nil, nil
+		}
+
+		pages, err := m.buildTableByStat(ctx, stats, lang)
+		if err != nil {
+			return nil, fmt.Errorf("build table by stat, err=%w", err)
+		}
+
+		return pages, nil
+	default:
+		stats, total, err := m.statRepo.StatisticsByPeriods(ctx, &search, ps.ToDB(), maxRawStatRows)
+		if err != nil {
+			return nil, fmt.Errorf("fetch statistic, err=%w", err)
+		}
+		if len(stats) == 0 {
+			return nil, nil
+		}
+
+		pages, err := m.buildTableByRawStat(stats, lang)
+		if err != nil {
+			return nil, fmt.Errorf("build table by raw stat, err=%w", err)
+		}
+		if total > len(stats) {
+			pages = append(pages, fmt.Sprintf(messagesByLang[lang][statTruncated], len(stats), total))
+		}
+
+		return pages, nil
+	}
 }
 
 // parseRawMsgAsExercisesAndPeriods Парсит воходное сообщение без знаков пунктуации.
@@ -579,7 +672,7 @@ func (m *MessageHandler) prepareCorrectAndInvalidPeriods(ctx context.Context, pe
 
 		// Если текстовое — пробуем многословный lookup (жадный, как для упражнений)
 		if m.langReByLang(lang).MatchString(word) {
-			p, consumed, ok := m.multiWordPeriodByText(periodWords[i:], time.Now(), lang)
+			p, consumed, ok := m.multiWordPeriodByText(periodWords[i:], time.Now().In(m.loc), lang)
 			if ok {
 				res = append(res, p)
 				i += consumed
@@ -654,44 +747,47 @@ func (m *MessageHandler) periodByText(text string, now time.Time, lang language)
 	return m.periodByTextPeriod(tp, now)
 }
 
+// periodByTextPeriod Считает границы текстового периода в часовом поясе переданного now
 func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p period, ok bool) {
+	loc := now.Location()
+
 	switch tp {
 	case todayPeriod:
 		p = period{
-			from: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC),
+			from: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), loc),
 		}
 		ok = true
 	case yesterdayPeriod:
 		p = period{
-			from: time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC),
+			from: time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc),
 		}
 		ok = true
 	case dayBeforeYesterdayPeriod:
 		p = period{
-			from: time.Date(now.Year(), now.Month(), now.Day()-2, 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, time.UTC),
+			from: time.Date(now.Year(), now.Month(), now.Day()-2, 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, loc),
 		}
 		ok = true
 	case weekPeriod:
 		// Отнимаем от текущего момента кол-во дней равное индексу дня недели. +1 нужно, чтобы считать с понедельника
 		monday := now.AddDate(0, 0, -isoWeekday(now.Weekday())+1)
 		p = period{
-			from: time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC),
+			from: time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), loc),
 		}
 		ok = true
 	case monthPeriod:
 		p = period{
-			from: time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC),
+			from: time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), loc),
 		}
 		ok = true
 	case yearPeriod:
 		p = period{
-			from: time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC),
+			from: time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), loc),
 		}
 		ok = true
 
@@ -699,8 +795,8 @@ func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p per
 		thisMonday := now.AddDate(0, 0, -isoWeekday(now.Weekday())+1)
 		lastMonday := thisMonday.AddDate(0, 0, -7)
 		p = period{
-			from: time.Date(lastMonday.Year(), lastMonday.Month(), lastMonday.Day(), 0, 0, 0, 0, time.UTC),
-			to:   time.Date(thisMonday.Year(), thisMonday.Month(), thisMonday.Day(), 0, 0, 0, 0, time.UTC),
+			from: time.Date(lastMonday.Year(), lastMonday.Month(), lastMonday.Day(), 0, 0, 0, 0, loc),
+			to:   time.Date(thisMonday.Year(), thisMonday.Month(), thisMonday.Day(), 0, 0, 0, 0, loc),
 		}
 		ok = true
 	case weekBeforeLastPeriod:
@@ -708,19 +804,19 @@ func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p per
 		lastMonday := thisMonday.AddDate(0, 0, -7)
 		twoWeeksAgoMonday := thisMonday.AddDate(0, 0, -14)
 		p = period{
-			from: time.Date(twoWeeksAgoMonday.Year(), twoWeeksAgoMonday.Month(), twoWeeksAgoMonday.Day(), 0, 0, 0, 0, time.UTC),
-			to:   time.Date(lastMonday.Year(), lastMonday.Month(), lastMonday.Day(), 0, 0, 0, 0, time.UTC),
+			from: time.Date(twoWeeksAgoMonday.Year(), twoWeeksAgoMonday.Month(), twoWeeksAgoMonday.Day(), 0, 0, 0, 0, loc),
+			to:   time.Date(lastMonday.Year(), lastMonday.Month(), lastMonday.Day(), 0, 0, 0, 0, loc),
 		}
 		ok = true
 	case lastMonthPeriod:
-		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 		p = period{
 			from: firstOfThisMonth.AddDate(0, -1, 0),
 			to:   firstOfThisMonth,
 		}
 		ok = true
 	case monthBeforeLastPeriod:
-		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 		p = period{
 			from: firstOfThisMonth.AddDate(0, -2, 0),
 			to:   firstOfThisMonth.AddDate(0, -1, 0),
@@ -728,14 +824,14 @@ func (m *MessageHandler) periodByTextPeriod(tp textPeriod, now time.Time) (p per
 		ok = true
 	case lastYearPeriod:
 		p = period{
-			from: time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year(), 1, 1, 0, 0, 0, 0, time.UTC),
+			from: time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc),
 		}
 		ok = true
 	case yearBeforeLastPeriod:
 		p = period{
-			from: time.Date(now.Year()-2, 1, 1, 0, 0, 0, 0, time.UTC),
-			to:   time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC),
+			from: time.Date(now.Year()-2, 1, 1, 0, 0, 0, 0, loc),
+			to:   time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, loc),
 		}
 		ok = true
 
@@ -773,11 +869,11 @@ func periodForWeekday(tp textPeriod, now time.Time) (period, bool) {
 		targetDay = now.AddDate(0, 0, -(7 - (targetISO - currentISO)))
 	}
 
-	from := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, time.UTC)
+	from := time.Date(targetDay.Year(), targetDay.Month(), targetDay.Day(), 0, 0, 0, 0, now.Location())
 
 	to := from.AddDate(0, 0, 1)
 	if targetISO == currentISO {
-		to = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), time.UTC)
+		to = time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), now.Nanosecond(), now.Location())
 	}
 	return period{from: from, to: to}, true
 }
@@ -795,8 +891,8 @@ func (m *MessageHandler) periodByTime(ctx context.Context, interval string) (p p
 		}
 
 		return period{
-			from: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC),   // С начала дня
-			to:   time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC), // До следующего дня (т.к. до - не включительно)
+			from: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, m.loc),   // С начала дня
+			to:   time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, m.loc), // До следующего дня (т.к. до - не включительно)
 		}, nil
 	}
 
@@ -820,8 +916,8 @@ func (m *MessageHandler) periodByTime(ctx context.Context, interval string) (p p
 		}
 
 		return period{
-			from: time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC), // С начала дня
-			to:   time.Date(to.Year(), to.Month(), to.Day()+1, 0, 0, 0, 0, time.UTC),     // До следующего дня (т.к. до - не включительно)
+			from: time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, m.loc), // С начала дня
+			to:   time.Date(to.Year(), to.Month(), to.Day()+1, 0, 0, 0, 0, m.loc),     // До следующего дня (т.к. до - не включительно)
 		}, invalid
 	}
 
@@ -842,69 +938,87 @@ func (m *MessageHandler) parseDate(date string) (time.Time, error) {
 	return parsed, nil
 }
 
+// buildTableByStat Собирает страницы таблицы статистики, сгруппированной по упражнению и его параметрам
 func (m *MessageHandler) buildTableByStat(ctx context.Context, in []db.GroupedStatistic, lang language) ([]string, error) {
 	if len(in) == 0 {
 		m.Print(ctx, "captured empty statistic list")
 		return nil, nil
 	}
 
-	tgStats := NewGroupedStatisticList(in, lang)
-
-	hasWeight := anyHasWeight(tgStats)
-	hasDistance := anyHasDistance(tgStats)
-	hasDuration := anyHasDuration(tgStats)
-
-	// Build header
-	header := messagesByLang[lang][tableExCol]
-	if hasWeight {
-		header += "\t" + messagesByLang[lang][tableWeightCol]
+	var (
+		exercises = make([]string, len(in))
+		params    = make([]db.StatisticParams, len(in))
+		counts    = make([]string, len(in))
+		sets      = make([]string, len(in))
+	)
+	for i, s := range NewGroupedStatisticList(in, lang) {
+		exercises[i] = s.TranslatedExercise
+		params[i] = db.StatisticParams{WeightKg: s.WeightKg, DistanceM: s.DistanceM, DurationSec: s.DurationSec}
+		counts[i] = fmt.Sprintf("%g", s.SumCount)
+		sets[i] = strconv.Itoa(s.Sets)
 	}
-	if hasDistance {
-		header += "\t" + messagesByLang[lang][tableDistCol]
-	}
-	if hasDuration {
-		header += "\t" + messagesByLang[lang][tableTimeCol]
-	}
-	header += "\t" + messagesByLang[lang][tableCntCol]
-	header += "\t" + messagesByLang[lang][tableSetCol]
 
-	// Build rows
+	msgs := messagesByLang[lang]
+	cols := []tableColumn{{header: msgs[tableExCol], cells: exercises}}
+	cols = append(cols, paramColumns(params, lang)...)
+	cols = append(cols,
+		tableColumn{header: msgs[tableCntCol], cells: counts},
+		tableColumn{header: msgs[tableSetCol], cells: sets},
+	)
+
+	return renderTable(cols)
+}
+
+// buildTableByRawStat Собирает страницы таблицы записей как есть: по строке на запись с датой её добавления
+func (m *MessageHandler) buildTableByRawStat(in []db.Statistic, lang language) ([]string, error) {
+	var (
+		dates     = make([]string, len(in))
+		exercises = make([]string, len(in))
+		params    = make([]db.StatisticParams, len(in))
+		counts    = make([]string, len(in))
+	)
+	for i, s := range NewStatisticList(in, lang) {
+		dates[i] = s.CreatedAt.In(m.loc).Format(statDateLayout)
+		exercises[i] = s.TranslatedExercise
+		if s.Params != nil {
+			params[i] = *s.Params
+		}
+		counts[i] = fmt.Sprintf("%g", s.Count)
+	}
+
+	msgs := messagesByLang[lang]
+	cols := []tableColumn{
+		{header: msgs[tableDateCol], cells: dates},
+		{header: msgs[tableExCol], cells: exercises},
+	}
+	cols = append(cols, paramColumns(params, lang)...)
+	cols = append(cols, tableColumn{header: msgs[tableCntCol], cells: counts})
+
+	return renderTable(cols)
+}
+
+// renderTable Выравнивает колонки и разбивает таблицу на страницы, заголовок дублируется на каждой
+func renderTable(cols []tableColumn) ([]string, error) {
 	var b strings.Builder
 	wr := tabwriter.NewWriter(&b, 0, 1, 4, ' ', 0)
-	fmt.Fprintln(wr, header)
 
-	for _, s := range tgStats {
-		row := s.TranslatedExercise
-		if hasWeight {
-			if s.WeightKg != nil {
-				row += "\t" + formatWeight(*s.WeightKg, lang)
-			} else {
-				row += "\t-"
-			}
+	line := make([]string, len(cols))
+	for i, c := range cols {
+		line[i] = c.header
+	}
+	fmt.Fprintln(wr, strings.Join(line, "\t"))
+
+	for row := range cols[0].cells {
+		for i, c := range cols {
+			line[i] = c.cells[row]
 		}
-		if hasDistance {
-			if s.DistanceM != nil {
-				row += "\t" + formatDistance(*s.DistanceM, lang)
-			} else {
-				row += "\t-"
-			}
-		}
-		if hasDuration {
-			if s.DurationSec != nil {
-				row += "\t" + formatDuration(*s.DurationSec, lang)
-			} else {
-				row += "\t-"
-			}
-		}
-		row += fmt.Sprintf("\t%g\t%d", s.SumCount, s.Sets)
-		fmt.Fprintln(wr, row)
+		fmt.Fprintln(wr, strings.Join(line, "\t"))
 	}
 
 	if err := wr.Flush(); err != nil {
 		return nil, err
 	}
 
-	// Первая строка после выравнивания — заголовок, остальные — данные. Заголовок дублируется на каждой странице
 	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
 	return paginateTable(lines[0], lines[1:], sendMessageLimit), nil
 }
@@ -1088,6 +1202,8 @@ func (m *MessageHandler) handleCallback(ctx context.Context, upd tgbotapi.Update
 		m.handleCBShowAll(ctx, cb, session, userID)
 	case cbShowPeriod:
 		m.handleCBShowPeriod(ctx, cb, session, userID, action)
+	case cbShowGrouping:
+		m.handleCBShowGrouping(ctx, cb, session, userID, action)
 	case cbSkipParam:
 		m.handleCBSkipParam(ctx, cb, session, userID, action)
 	case cbCancel:
@@ -1182,8 +1298,23 @@ func (m *MessageHandler) handleCBQuickAdd(ctx context.Context, cb *tgbotapi.Call
 	m.sessions.Delete(userID)
 }
 
+// rejectStaleButton Отвечает, что сессия истекла, если кнопка нажата не на своём шаге диалога.
+// Шаги статистики хранят выбор в сессии, поэтому кнопка из старого сообщения иначе перехватила бы сессию другого диалога
+func (m *MessageHandler) rejectStaleButton(cb *tgbotapi.CallbackQuery, session *UserSession, step SessionState) bool {
+	if session.State == step {
+		return false
+	}
+
+	m.answerCallback(cb.ID, messagesByLang[session.Lang][sessionExpired])
+	return true
+}
+
 // handleCBShowExercise обрабатывает выбор упражнения для статистики
 func (m *MessageHandler) handleCBShowExercise(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	if m.rejectStaleButton(cb, session, StateShowAwaitExercise) {
+		return
+	}
+
 	session.State = StateShowAwaitPeriod
 	session.ShowExercises = Exercises{action.Exercise}
 	m.sessions.Set(userID, session)
@@ -1200,6 +1331,10 @@ func (m *MessageHandler) handleCBShowExercise(_ context.Context, cb *tgbotapi.Ca
 
 // handleCBShowAll обрабатывает кнопку "Всё" для статистики
 func (m *MessageHandler) handleCBShowAll(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string) {
+	if m.rejectStaleButton(cb, session, StateShowAwaitExercise) {
+		return
+	}
+
 	session.State = StateShowAwaitPeriod
 	session.ShowExercises = nil // nil = все упражнения
 	m.sessions.Set(userID, session)
@@ -1211,41 +1346,49 @@ func (m *MessageHandler) handleCBShowAll(_ context.Context, cb *tgbotapi.Callbac
 }
 
 // handleCBShowPeriod обрабатывает выбор периода для статистики
-func (m *MessageHandler) handleCBShowPeriod(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
-	p, _ := m.periodByTextPeriod(action.Period, time.Now())
+func (m *MessageHandler) handleCBShowPeriod(_ context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	if m.rejectStaleButton(cb, session, StateShowAwaitPeriod) {
+		return
+	}
+
+	session.State = StateShowAwaitGrouping
+	session.ShowPeriod = action.Period
+	m.sessions.Set(userID, session)
+
+	lang := session.Lang
+	exName := messagesByLang[lang][allExBtn]
+	if len(session.ShowExercises) != 0 {
+		exName = exTextByLang[lang][session.ShowExercises[0]]
+		if exName == "" {
+			exName = session.ShowExercises[0].String()
+		}
+	}
+	text := fmt.Sprintf(messagesByLang[lang][chooseGrouping], exName, periodTextByLang[lang][action.Period])
+	m.editMessageWithKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, text, groupingInlineKeyboard(lang))
+	m.answerCallback(cb.ID, "")
+}
+
+// handleCBShowGrouping обрабатывает выбор группировки и выводит статистику
+func (m *MessageHandler) handleCBShowGrouping(ctx context.Context, cb *tgbotapi.CallbackQuery, session *UserSession, userID string, action CallbackAction) {
+	if m.rejectStaleButton(cb, session, StateShowAwaitGrouping) {
+		return
+	}
+
+	p, _ := m.periodByTextPeriod(session.ShowPeriod, time.Now().In(m.loc))
 
 	var periodsFilter periods
 	if !p.IsZero() {
 		periodsFilter = periods{p}
 	}
 
-	s := db.GroupedStatisticSearch{
-		StatisticSearch: db.StatisticSearch{
-			TgUserID:  &userID,
-			Exercises: session.ShowExercises.StringSlice(),
-		},
-		Periods: periodsFilter.ToDB(),
-	}
-
-	stats, err := m.statRepo.GroupedStatisticByFilters(ctx, s)
+	pages, err := m.statPages(ctx, userID, session.ShowExercises, periodsFilter, action.Grouping, session.Lang)
 	if err != nil {
 		m.Error(ctx, "fetch statistic", "err", err)
 		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
 		return
 	}
-
-	if len(stats) == 0 {
-		m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, messagesByLang[session.Lang][nothingFound])
-		m.answerCallback(cb.ID, "")
-		m.sessions.Delete(userID)
-		return
-	}
-
-	pages, err := m.buildTableByStat(ctx, stats, session.Lang)
-	if err != nil {
-		m.Error(ctx, "build table", "err", err)
-		m.answerCallback(cb.ID, messagesByLang[session.Lang][errMsg])
-		return
+	if len(pages) == 0 {
+		pages = []string{messagesByLang[session.Lang][nothingFound]}
 	}
 
 	m.editMessageRemoveKeyboard(cb.Message.Chat.ID, cb.Message.MessageID, pages[0])

@@ -102,6 +102,11 @@ const (
 	weekdaySundayPeriod    textPeriod = "weekdaySunday"
 )
 
+const (
+	noGrouping       statGrouping = "none"
+	exerciseGrouping statGrouping = "exercise"
+)
+
 var (
 	cmdByLang = map[language]map[string]cmd{
 		langRU: {
@@ -2231,6 +2236,8 @@ const (
 	tableWeightCol
 	tableDistCol
 	tableTimeCol
+	tableDateCol
+	statTruncated
 	weightRequired
 	durationRequired
 	distanceRequired
@@ -2270,6 +2277,7 @@ const (
 	backBtn
 	allExBtn
 	choosePeriod
+	chooseGrouping
 	addedConfirmation
 	quickCopyHint
 	orWriteText
@@ -2302,6 +2310,8 @@ var (
 			tableWeightCol:            "вес",
 			tableDistCol:              "дистанция",
 			tableTimeCol:              "время",
+			tableDateCol:              "дата",
+			statTruncated:             "Показаны только последние записи: %d из %d. Сузь период или сгруппируй по упражнениям",
 			weightRequired:            "Для этого упражнения нужно указать вес. Пример: жим 80кг 10",
 			durationRequired:          "Для этого упражнения нужно указать время. Пример: планка 90сек",
 			distanceRequired:          "Для этого упражнения нужно указать дистанцию. Пример: бег 5км 25мин",
@@ -2335,6 +2345,8 @@ var (
 				"`@%[1]s покажи подтягивания отжимания за неделю`\n\n" +
 				"*Или всё сразу:*\n" +
 				"`@%[1]s покажи всё за сегодня`\n\n" +
+				"По умолчанию выводятся все записи с датами, от новых к старым. Чтобы сгруппировать их по упражнениям, добавь в конец `по упражнениям`:\n" +
+				"`@%[1]s покажи всё за неделю по упражнениям`\n\n" +
 				"*Поддерживаемые периоды:* сегодня, вчера, позавчера, неделя, прошлая неделя, позапрошлая неделя, месяц, прошлый месяц, позапрошлый месяц, год, прошлый год, позапрошлый год, всё время.\n" +
 				"Также можно указать день недели: понедельник / пн, вторник / вт, среда / ср, четверг / чт, пятница / пт, суббота / сб, воскресенье / вс.\n" +
 				"Или точную дату или интервал:\n" +
@@ -2370,6 +2382,7 @@ var (
 			backBtn:                "<< Назад",
 			allExBtn:               "Всё",
 			choosePeriod:           "%s — за какой период?",
+			chooseGrouping:         "%s, %s — сгруппировать?",
 			addedConfirmation:      "Добавлено ✅ %s: %s",
 			quickCopyHint:          "Скопируй для быстрой вставки: %s",
 			orWriteText:            "Или напиши текстом",
@@ -2399,6 +2412,8 @@ var (
 			tableWeightCol:            "weight",
 			tableDistCol:              "distance",
 			tableTimeCol:              "time",
+			tableDateCol:              "date",
+			statTruncated:             "Only the latest records are shown: %d of %d. Narrow the period or group by exercise",
 			weightRequired:            "Weight is required for this exercise. Example: bench 80kg 10",
 			durationRequired:          "Duration is required for this exercise. Example: plank 90sec",
 			distanceRequired:          "Distance is required for this exercise. Example: run 5km 25min",
@@ -2432,6 +2447,8 @@ var (
 				"`@%[1]s show pull-ups push-ups for week`\n\n" +
 				"*Or everything at once:*\n" +
 				"`@%[1]s show all for today`\n\n" +
+				"By default every record is shown with its date, newest first. To group them by exercise, add `by exercise` at the end:\n" +
+				"`@%[1]s show all for week by exercise`\n\n" +
 				"*Supported periods:* today, yesterday, week, last week, week before last, month, last month, month before last, year, last year, year before last, all.\n" +
 				"You can also specify a weekday: monday / mon, tuesday / tue, wednesday / wed, thursday / thu, friday / fri, saturday / sat, sunday / sun.\n" +
 				"Or an exact date or a range:\n" +
@@ -2467,6 +2484,7 @@ var (
 			backBtn:                "<< Back",
 			allExBtn:               "All",
 			choosePeriod:           "%s — for what period?",
+			chooseGrouping:         "%s, %s — group it?",
 			addedConfirmation:      "Added ✅ %s: %s",
 			quickCopyHint:          "Copy for quick paste: %s",
 			orWriteText:            "Or type it",
@@ -2551,6 +2569,178 @@ var replyButtonCmd = map[language]map[string]cmd{
 		"📝 Add":        addCmd,
 		"📊 Statistics": showCmd,
 		"❓ Help":       helpCmd,
+	},
+}
+
+// groupingOrder Порядок кнопок на шаге выбора группировки
+var groupingOrder = []statGrouping{noGrouping, exerciseGrouping}
+
+// defaultGrouping Группировка для запроса, где просят сгруппировать, но не уточняют по чему
+const defaultGrouping = exerciseGrouping
+
+var groupingTextByLang = map[language]map[statGrouping]string{
+	langRU: {
+		noGrouping:       "Без группировки",
+		exerciseGrouping: "По упражнениям",
+	},
+	langEN: {
+		noGrouping:       "No grouping",
+		exerciseGrouping: "By exercise",
+	},
+}
+
+// groupingByLang Фразы в конце запроса статистики, которые говорят, по чему группировать
+var groupingByLang = map[language]map[string]statGrouping{
+	langRU: {
+		"по упражнению":          exerciseGrouping,
+		"по упражнениям":         exerciseGrouping,
+		"по упражнения":          exerciseGrouping,
+		"по упражнение":          exerciseGrouping,
+		"по упражнений":          exerciseGrouping,
+		"по упражнениях":         exerciseGrouping,
+		"по упражненям":          exerciseGrouping,
+		"по упражненю":           exerciseGrouping,
+		"по упражненью":          exerciseGrouping,
+		"по упражненьям":         exerciseGrouping,
+		"по упрожнению":          exerciseGrouping,
+		"по упрожнениям":         exerciseGrouping,
+		"по упрожнения":          exerciseGrouping,
+		"по упрожненям":          exerciseGrouping,
+		"по упрожненю":           exerciseGrouping,
+		"па упражнению":          exerciseGrouping,
+		"па упражнениям":         exerciseGrouping,
+		"поупражнению":           exerciseGrouping,
+		"поупражнениям":          exerciseGrouping,
+		"по упр":                 exerciseGrouping,
+		"по каждому упражнению":  exerciseGrouping,
+		"по каждому упрожнению":  exerciseGrouping,
+		"по виду упражнения":     exerciseGrouping,
+		"по видам упражнений":    exerciseGrouping,
+		"по типу упражнения":     exerciseGrouping,
+		"по типам упражнений":    exerciseGrouping,
+		"по названию упражнения": exerciseGrouping,
+
+		"как есть":         noGrouping,
+		"несгруппированно": noGrouping,
+		"несгруппировано":  noGrouping,
+		"несгрупированно":  noGrouping,
+		"несгрупировано":   noGrouping,
+	},
+	langEN: {
+		"by exercise":       exerciseGrouping,
+		"by exercises":      exerciseGrouping,
+		"by excercise":      exerciseGrouping,
+		"by excercises":     exerciseGrouping,
+		"by exersise":       exerciseGrouping,
+		"by exersises":      exerciseGrouping,
+		"by exercize":       exerciseGrouping,
+		"by exercizes":      exerciseGrouping,
+		"by exersize":       exerciseGrouping,
+		"by exersizes":      exerciseGrouping,
+		"by exercice":       exerciseGrouping,
+		"by exercices":      exerciseGrouping,
+		"by exercis":        exerciseGrouping,
+		"by ex":             exerciseGrouping,
+		"per exercise":      exerciseGrouping,
+		"per exercises":     exerciseGrouping,
+		"by each exercise":  exerciseGrouping,
+		"for each exercise": exerciseGrouping,
+		"by exercise type":  exerciseGrouping,
+		"by exercise name":  exerciseGrouping,
+
+		"as is":      noGrouping,
+		"ungrouped":  noGrouping,
+		"ungroupped": noGrouping,
+		"ungruped":   noGrouping,
+	},
+}
+
+// groupingWordByLang Фразы в конце запроса статистики, которые просят сгруппировать, не уточняя по чему
+var groupingWordByLang = map[language]map[string]struct{}{
+	langRU: {
+		"сгруппируй":      struct{}{},
+		"сгруппируйте":    struct{}{},
+		"сгруппировать":   struct{}{},
+		"сгруппированно":  struct{}{},
+		"сгруппировано":   struct{}{},
+		"сгруппированные": struct{}{},
+		"и сгруппируй":    struct{}{},
+		"группируй":       struct{}{},
+		"группировать":    struct{}{},
+		"группировка":     struct{}{},
+		"группировку":     struct{}{},
+		"группировки":     struct{}{},
+		"группировкой":    struct{}{},
+		"с группировкой":  struct{}{},
+		"сгрупируй":       struct{}{},
+		"сгрупировать":    struct{}{},
+		"сгрупированно":   struct{}{},
+		"сгрупировано":    struct{}{},
+		"сгруперуй":       struct{}{},
+		"сгруппируи":      struct{}{},
+		"згруппируй":      struct{}{},
+		"згрупируй":       struct{}{},
+		"групируй":        struct{}{},
+		"групировать":     struct{}{},
+		"групировка":      struct{}{},
+		"групировкой":     struct{}{},
+		"групировки":      struct{}{},
+		"с групировкой":   struct{}{},
+		"суммарно":        struct{}{},
+		"сумарно":         struct{}{},
+		"суммой":          struct{}{},
+		"суммируй":        struct{}{},
+		"просуммируй":     struct{}{},
+		"в сумме":         struct{}{},
+		"итого":           struct{}{},
+	},
+	langEN: {
+		"group":         struct{}{},
+		"grouped":       struct{}{},
+		"grouping":      struct{}{},
+		"groups":        struct{}{},
+		"group it":      struct{}{},
+		"group them":    struct{}{},
+		"and group":     struct{}{},
+		"with grouping": struct{}{},
+		"groupped":      struct{}{},
+		"groupping":     struct{}{},
+		"gruop":         struct{}{},
+		"gruoped":       struct{}{},
+		"grup":          struct{}{},
+		"gruped":        struct{}{},
+		"groop":         struct{}{},
+		"grooped":       struct{}{},
+		"sum":           struct{}{},
+		"summed":        struct{}{},
+		"summary":       struct{}{},
+		"summarize":     struct{}{},
+		"summarized":    struct{}{},
+		"summarise":     struct{}{},
+		"summarised":    struct{}{},
+		"aggregate":     struct{}{},
+		"aggregated":    struct{}{},
+	},
+}
+
+// groupingNegationByLang Отрицания перед фразой о группировке: с ними запрос означает вывод без группировки
+var groupingNegationByLang = map[language]map[string]struct{}{
+	langRU: {
+		"не":  struct{}{},
+		"ни":  struct{}{},
+		"без": struct{}{},
+		"бес": struct{}{},
+	},
+	langEN: {
+		"no":      struct{}{},
+		"not":     struct{}{},
+		"non":     struct{}{},
+		"without": struct{}{},
+		"witout":  struct{}{},
+		"wihout":  struct{}{},
+		"dont":    struct{}{},
+		"do not":  struct{}{},
+		"never":   struct{}{},
 	},
 }
 

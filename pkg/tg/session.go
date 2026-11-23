@@ -27,6 +27,7 @@ const (
 	// Показ статистики
 	StateShowAwaitExercise // Ожидание выбора упражнения для статистики
 	StateShowAwaitPeriod   // Ожидание выбора периода
+	StateShowAwaitGrouping // Ожидание выбора группировки
 )
 
 // ParamType возвращает тип параметра, соответствующий состоянию ожидания ввода
@@ -87,6 +88,7 @@ type UserSession struct {
 
 	// Контекст показа статистики
 	ShowExercises Exercises
+	ShowPeriod    textPeriod
 
 	// Сообщение с inline-кнопками (для редактирования in-place)
 	LastBotMessageID int
@@ -104,6 +106,7 @@ func (s *UserSession) String() string {
 		fmt.Sprintf("params: %s", s.Params.String()),
 		fmt.Sprintf("custom target: %d", s.CustomTarget),
 		fmt.Sprintf("show exercises: %s", s.ShowExercises.String()),
+		fmt.Sprintf("show period: %s", s.ShowPeriod),
 		fmt.Sprintf("last bot message ID: %d", s.LastBotMessageID),
 		fmt.Sprintf("chat ID: %d", s.ChatID),
 		fmt.Sprintf("updated at: %s", s.UpdatedAt),

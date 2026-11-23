@@ -3,6 +3,7 @@ package tg
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ const (
 	cbShowExercise
 	cbShowAll
 	cbShowPeriod
+	cbShowGrouping
 	cbExercisePage
 	cbCancel
 	cbSkipParam
@@ -38,6 +40,7 @@ type CallbackAction struct {
 	Count        float64
 	Params       *db.StatisticParams
 	Period       textPeriod
+	Grouping     statGrouping
 	Page         int
 	Context      string // "add" или "show"
 	CustomTarget CustomValueTarget
@@ -70,6 +73,8 @@ func parseCallbackData(data string) (CallbackAction, error) {
 		return CallbackAction{Type: cbShowAll}, nil
 	case "sp":
 		return parseShowPeriodCallback(parts)
+	case "sg":
+		return parseShowGroupingCallback(parts)
 	case "pg":
 		return parsePageCallback(parts)
 	case "sk":
@@ -198,6 +203,17 @@ func parseShowPeriodCallback(parts []string) (CallbackAction, error) {
 		return CallbackAction{}, fmt.Errorf("%w: missing period", errInvalidCallbackData)
 	}
 	return CallbackAction{Type: cbShowPeriod, Period: textPeriod(parts[1])}, nil
+}
+
+func parseShowGroupingCallback(parts []string) (CallbackAction, error) {
+	if len(parts) < 2 {
+		return CallbackAction{}, fmt.Errorf("%w: missing grouping", errInvalidCallbackData)
+	}
+	grouping := statGrouping(parts[1])
+	if !slices.Contains(groupingOrder, grouping) {
+		return CallbackAction{}, fmt.Errorf("%w: unknown grouping %q", errInvalidCallbackData, parts[1])
+	}
+	return CallbackAction{Type: cbShowGrouping, Grouping: grouping}, nil
 }
 
 func parsePageCallback(parts []string) (CallbackAction, error) {

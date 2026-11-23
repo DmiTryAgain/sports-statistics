@@ -26,3 +26,4 @@ app.log
 app.err.log
 
 docs/llm/tasks/
+.mcp.json

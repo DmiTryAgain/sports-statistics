@@ -2,16 +2,25 @@ package tg
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
+	"path"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
 
 	"github.com/DmiTryAgain/sports-statistics/pkg/db"
+	dbtest "github.com/DmiTryAgain/sports-statistics/pkg/db/test"
 
 	"github.com/go-pg/pg/v10"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/vmkteam/embedlog"
 )
 
@@ -1353,5 +1362,867 @@ func TestBuildTableByStatPaginated(t *testing.T) {
 	}
 	if rows != len(stats) {
 		t.Errorf("total data rows = %d, want %d", rows, len(stats))
+	}
+}
+
+func TestBuildTableByStat(t *testing.T) {
+	stats := []db.GroupedStatistic{
+		{Exercise: "benchPress", SumCount: 20, Sets: 2, WeightKg: ptr[float64](80)},
+		{Exercise: "jogging", SumCount: 1, Sets: 1, DistanceM: ptr[float64](5000), DurationSec: ptr[float64](1500)},
+		{Exercise: "pullUp", SumCount: 30.5, Sets: 3},
+	}
+
+	tests := []struct {
+		name  string
+		stats []db.GroupedStatistic
+		lang  language
+		want  string
+	}{
+		{
+			name:  "all param columns ru",
+			stats: stats,
+			lang:  langRU,
+			want: "```\n" +
+				"упражнение      вес     дистанция    время    кол-во    подходы\n" +
+				"жим лёжа        80кг    -            -        20        2\n" +
+				"бег             -       5км          25мин    1         1\n" +
+				"подтягивания    -       -            -        30.5      3\n" +
+				"```",
+		},
+		{
+			name:  "all param columns en",
+			stats: stats,
+			lang:  langEN,
+			want: "```\n" +
+				"exercise       weight    distance    time     reps    sets\n" +
+				"bench press    80kg      -           -        20      2\n" +
+				"jogging        -         5km         25min    1       1\n" +
+				"pull-ups       -         -           -        30.5    3\n" +
+				"```",
+		},
+		{
+			name:  "param columns without values are omitted",
+			stats: stats[2:],
+			lang:  langRU,
+			want: "```\n" +
+				"упражнение      кол-во    подходы\n" +
+				"подтягивания    30.5      3\n" +
+				"```",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pages, err := mh.buildTableByStat(t.Context(), tt.stats, tt.lang)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pages) != 1 || pages[0] != tt.want {
+				t.Errorf("got pages:\n%s\nwant:\n%s", strings.Join(pages, "\n"), tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractGrouping(t *testing.T) {
+	tests := []struct {
+		name         string
+		rawMsg       string
+		lang         language
+		wantCleaned  string
+		wantGrouping statGrouping
+	}{
+		{
+			name:         "no grouping ru",
+			rawMsg:       "подтягивания за неделю",
+			lang:         langRU,
+			wantCleaned:  "подтягивания за неделю",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "by exercise ru",
+			rawMsg:       "подтягивания за неделю по упражнению",
+			lang:         langRU,
+			wantCleaned:  "подтягивания за неделю",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "by exercises with typo ru",
+			rawMsg:       "всё за месяц по упрожнениям",
+			lang:         langRU,
+			wantCleaned:  "всё за месяц",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "group verb before target ru",
+			rawMsg:       "всё за месяц сгруппируй по упражнениям",
+			lang:         langRU,
+			wantCleaned:  "всё за месяц",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "group verb after target ru",
+			rawMsg:       "всё по упражнениям сгруппируй",
+			lang:         langRU,
+			wantCleaned:  "всё",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "with grouping noun ru",
+			rawMsg:       "всё за сегодня с группировкой по упражнениям",
+			lang:         langRU,
+			wantCleaned:  "всё за сегодня",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "group word with typo without target uses default grouping ru",
+			rawMsg:       "всё за год сгрупируй",
+			lang:         langRU,
+			wantCleaned:  "всё за год",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "sum word ru",
+			rawMsg:       "жим за неделю суммарно",
+			lang:         langRU,
+			wantCleaned:  "жим за неделю",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "only grouping phrase ru",
+			rawMsg:       "по упражнениям",
+			lang:         langRU,
+			wantCleaned:  "",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "all exercises phrase is not grouping ru",
+			rawMsg:       "все упражнения",
+			lang:         langRU,
+			wantCleaned:  "все упражнения",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "grouping phrase not at the end is ignored ru",
+			rawMsg:       "по упражнениям всё за неделю",
+			lang:         langRU,
+			wantCleaned:  "по упражнениям всё за неделю",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "date range preposition is not grouping ru",
+			rawMsg:       "всё с 01.10.2025 по 10.10.2025",
+			lang:         langRU,
+			wantCleaned:  "всё с 01.10.2025 по 10.10.2025",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "negated group verb ru",
+			rawMsg:       "всё не группируй",
+			lang:         langRU,
+			wantCleaned:  "всё",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "without grouping ru",
+			rawMsg:       "всё за неделю без группировки",
+			lang:         langRU,
+			wantCleaned:  "всё за неделю",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "negation wins over target ru",
+			rawMsg:       "всё без группировки по упражнениям",
+			lang:         langRU,
+			wantCleaned:  "всё",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "negated target ru",
+			rawMsg:       "всё за месяц не по упражнениям",
+			lang:         langRU,
+			wantCleaned:  "всё за месяц",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "as is ru",
+			rawMsg:       "всё за сегодня как есть",
+			lang:         langRU,
+			wantCleaned:  "всё за сегодня",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "negation without grouping phrase is left alone ru",
+			rawMsg:       "всё без",
+			lang:         langRU,
+			wantCleaned:  "всё без",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "empty message",
+			rawMsg:       "",
+			lang:         langRU,
+			wantCleaned:  "",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "no grouping en",
+			rawMsg:       "all no grouping",
+			lang:         langEN,
+			wantCleaned:  "all",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "without grouping en",
+			rawMsg:       "all for week without grouping",
+			lang:         langEN,
+			wantCleaned:  "all for week",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "do not group by exercise en",
+			rawMsg:       "pull ups for month do not group by exercise",
+			lang:         langEN,
+			wantCleaned:  "pull ups for month",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "ungrouped en",
+			rawMsg:       "all ungrouped",
+			lang:         langEN,
+			wantCleaned:  "all",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "request without grouping phrase en",
+			rawMsg:       "push ups for today",
+			lang:         langEN,
+			wantCleaned:  "push ups for today",
+			wantGrouping: noGrouping,
+		},
+		{
+			name:         "by exercise en",
+			rawMsg:       "all for week by exercise",
+			lang:         langEN,
+			wantCleaned:  "all for week",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "grouped by exercises with typos en",
+			rawMsg:       "pull ups for month groupped by excercises",
+			lang:         langEN,
+			wantCleaned:  "pull ups for month",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "per exercise en",
+			rawMsg:       "all for last week per exercise",
+			lang:         langEN,
+			wantCleaned:  "all for last week",
+			wantGrouping: exerciseGrouping,
+		},
+		{
+			name:         "group word without target uses default grouping en",
+			rawMsg:       "all grouped",
+			lang:         langEN,
+			wantCleaned:  "all",
+			wantGrouping: exerciseGrouping,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotCleaned, gotGrouping := extractGrouping(tt.rawMsg, tt.lang)
+			if gotCleaned != tt.wantCleaned {
+				t.Errorf("extractGrouping() cleaned = %q, want %q", gotCleaned, tt.wantCleaned)
+			}
+			if gotGrouping != tt.wantGrouping {
+				t.Errorf("extractGrouping() grouping = %q, want %q", gotGrouping, tt.wantGrouping)
+			}
+		})
+	}
+}
+
+func TestBuildTableByRawStat(t *testing.T) {
+	stats := []db.Statistic{
+		{Exercise: "pullUp", Count: 12.5, CreatedAt: time.Date(2025, 10, 15, 18, 35, 0, 0, time.Local)},
+		{Exercise: "benchPress", Count: 8, Params: &db.StatisticParams{WeightKg: ptr[float64](80)}, CreatedAt: time.Date(2025, 10, 14, 9, 5, 0, 0, time.Local)},
+		{Exercise: "jogging", Count: 1, Params: &db.StatisticParams{DistanceM: ptr[float64](5000), DurationSec: ptr[float64](1500)}, CreatedAt: time.Date(2024, 1, 2, 7, 0, 0, 0, time.Local)},
+	}
+
+	tests := []struct {
+		name  string
+		stats []db.Statistic
+		lang  language
+		want  string
+	}{
+		{
+			name:  "all param columns ru",
+			stats: stats,
+			lang:  langRU,
+			want: "```\n" +
+				"дата                упражнение      вес     дистанция    время    кол-во\n" +
+				"15.10.2025 18:35    подтягивания    -       -            -        12.5\n" +
+				"14.10.2025 09:05    жим лёжа        80кг    -            -        8\n" +
+				"02.01.2024 07:00    бег             -       5км          25мин    1\n" +
+				"```",
+		},
+		{
+			name:  "all param columns en",
+			stats: stats,
+			lang:  langEN,
+			want: "```\n" +
+				"date                exercise       weight    distance    time     reps\n" +
+				"15.10.2025 18:35    pull-ups       -         -           -        12.5\n" +
+				"14.10.2025 09:05    bench press    80kg      -           -        8\n" +
+				"02.01.2024 07:00    jogging        -         5km         25min    1\n" +
+				"```",
+		},
+		{
+			name:  "param columns without values are omitted",
+			stats: stats[:1],
+			lang:  langRU,
+			want: "```\n" +
+				"дата                упражнение      кол-во\n" +
+				"15.10.2025 18:35    подтягивания    12.5\n" +
+				"```",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pages, err := mh.buildTableByRawStat(tt.stats, tt.lang)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pages) != 1 || pages[0] != tt.want {
+				t.Errorf("got pages:\n%s\nwant:\n%s", strings.Join(pages, "\n"), tt.want)
+			}
+		})
+	}
+}
+
+// addShowStatistics Добавляет пользователю записи для проверки вывода статистики и возвращает функцию их удаления.
+// Время записей задано в часовом поясе общего обработчика mh
+func addShowStatistics(t *testing.T, userID string) dbtest.Cleaner {
+	stats := []db.Statistic{
+		{Exercise: pullUpEx.String(), Count: 10, CreatedAt: time.Date(2025, 10, 15, 12, 30, 0, 0, mh.loc)},
+		{Exercise: pullUpEx.String(), Count: 12, CreatedAt: time.Date(2025, 10, 15, 12, 35, 0, 0, mh.loc)},
+		{Exercise: benchPressEx.String(), Count: 8, Params: &db.StatisticParams{WeightKg: ptr[float64](80)}, CreatedAt: time.Date(2025, 10, 14, 12, 5, 0, 0, mh.loc)},
+	}
+
+	cleaners := make([]dbtest.Cleaner, 0, len(stats))
+	for i := range stats {
+		stats[i].TgUserID = userID
+		stats[i].StatusID = db.StatusEnabled
+		_, cl := dbtest.Statistic(t, pgConn, &stats[i])
+		cleaners = append(cleaners, cl)
+	}
+
+	return func() {
+		for _, cl := range cleaners {
+			cl()
+		}
+	}
+}
+
+func TestMessageHandler_handleShow(t *testing.T) {
+	ctx := t.Context()
+	userID := dbtest.NextStringID()
+	defer addShowStatistics(t, userID)()
+
+	tests := []struct {
+		name   string
+		rawMsg string
+		lang   language
+		want   []string
+	}{
+		{
+			name:   "records as is newest first by default ru",
+			rawMsg: "всё",
+			lang:   langRU,
+			want: []string{"```\n" +
+				"дата                упражнение      вес     кол-во\n" +
+				"15.10.2025 12:35    подтягивания    -       12\n" +
+				"15.10.2025 12:30    подтягивания    -       10\n" +
+				"14.10.2025 12:05    жим лёжа        80кг    8\n" +
+				"```"},
+		},
+		{
+			name:   "records as is newest first by default en",
+			rawMsg: "all",
+			lang:   langEN,
+			want: []string{"```\n" +
+				"date                exercise       weight    reps\n" +
+				"15.10.2025 12:35    pull-ups       -         12\n" +
+				"15.10.2025 12:30    pull-ups       -         10\n" +
+				"14.10.2025 12:05    bench press    80kg      8\n" +
+				"```"},
+		},
+		{
+			name:   "grouped by exercise ru",
+			rawMsg: "всё по упражнениям",
+			lang:   langRU,
+			want: []string{"```\n" +
+				"упражнение      вес     кол-во    подходы\n" +
+				"жим лёжа        80кг    8         1\n" +
+				"подтягивания    -       22        2\n" +
+				"```"},
+		},
+		{
+			name:   "grouped by exercise en",
+			rawMsg: "all grouped by exercise",
+			lang:   langEN,
+			want: []string{"```\n" +
+				"exercise       weight    reps    sets\n" +
+				"bench press    80kg      8       1\n" +
+				"pull-ups       -         22      2\n" +
+				"```"},
+		},
+		{
+			name:   "exercise and period filters without grouping ru",
+			rawMsg: "жим подтягивания за 14.10.2025",
+			lang:   langRU,
+			want: []string{"```\n" +
+				"дата                упражнение    вес     кол-во\n" +
+				"14.10.2025 12:05    жим лёжа      80кг    8\n" +
+				"```"},
+		},
+		{
+			name:   "exercise and period filters with grouping ru",
+			rawMsg: "подтягивания за 15.10.2025 сгруппируй по упражнению",
+			lang:   langRU,
+			want: []string{"```\n" +
+				"упражнение      кол-во    подходы\n" +
+				"подтягивания    22        2\n" +
+				"```"},
+		},
+		{
+			name:   "invalid period is reported before the table ru",
+			rawMsg: "подтягивания за ерунду по упражнениям",
+			lang:   langRU,
+			want: []string{messagesByLang[langRU][periodsInvalid] + ": ерунду\n" +
+				"```\n" +
+				"упражнение      кол-во    подходы\n" +
+				"подтягивания    22        2\n" +
+				"```"},
+		},
+		{
+			name:   "negated grouping keeps records as is ru",
+			rawMsg: "подтягивания не группируй",
+			lang:   langRU,
+			want: []string{"```\n" +
+				"дата                упражнение      кол-во\n" +
+				"15.10.2025 12:35    подтягивания    12\n" +
+				"15.10.2025 12:30    подтягивания    10\n" +
+				"```"},
+		},
+		{
+			name:   "negated grouping keeps records as is en",
+			rawMsg: "pull ups no grouping",
+			lang:   langEN,
+			want: []string{"```\n" +
+				"date                exercise    reps\n" +
+				"15.10.2025 12:35    pull-ups    12\n" +
+				"15.10.2025 12:30    pull-ups    10\n" +
+				"```"},
+		},
+		{
+			name:   "nothing found ru",
+			rawMsg: "отжимания",
+			lang:   langRU,
+			want:   []string{messagesByLang[langRU][nothingFound]},
+		},
+		{
+			name:   "nothing found with grouping en",
+			rawMsg: "push ups by exercise",
+			lang:   langEN,
+			want:   []string{messagesByLang[langEN][nothingFound]},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := mh.handleShow(ctx, tt.rawMsg, userID, tt.lang)
+			if err != nil {
+				t.Fatalf("handleShow() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("handleShow() got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tt.want, "\n"))
+			}
+		})
+	}
+
+	t.Run("grouping phrase without exercise asks for exercise ru", func(t *testing.T) {
+		got, err := mh.handleShow(ctx, "по упражнениям", userID, langRU)
+		if err != nil {
+			t.Fatalf("handleShow() error = %v", err)
+		}
+		if len(got) != 1 || !strings.HasPrefix(got[0], messagesByLang[langRU][emptyEx]) {
+			t.Errorf("handleShow() got %q, want message starting with %q", got, messagesByLang[langRU][emptyEx])
+		}
+	})
+}
+
+func TestMessageHandler_handleShowTruncated(t *testing.T) {
+	ctx := t.Context()
+	userID := dbtest.NextStringID()
+
+	oldest := time.Date(2025, 10, 15, 12, 0, 0, 0, time.Local)
+	stats := make([]db.Statistic, maxRawStatRows+1)
+	for i := range stats {
+		stats[i] = db.Statistic{
+			TgUserID:  userID,
+			Exercise:  pullUpEx.String(),
+			Count:     float64(i + 1),
+			CreatedAt: oldest.Add(time.Duration(i) * time.Minute),
+			StatusID:  db.StatusEnabled,
+		}
+	}
+	if _, err := pgConn.ModelContext(ctx, &stats).Insert(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := pgConn.ModelContext(ctx, (*db.Statistic)(nil)).Where(`"tgUserId" = ?`, userID).Delete(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	pages, err := mh.handleShow(ctx, "подтягивания", userID, langRU)
+	if err != nil {
+		t.Fatalf("handleShow() error = %v", err)
+	}
+
+	wantNotice := fmt.Sprintf(messagesByLang[langRU][statTruncated], maxRawStatRows, len(stats))
+	if got := pages[len(pages)-1]; got != wantNotice {
+		t.Errorf("last message = %q, want %q", got, wantNotice)
+	}
+
+	var rows []string
+	for _, p := range pages[:len(pages)-1] {
+		lines := strings.Split(p, "\n")
+		rows = append(rows, lines[2:len(lines)-1]...)
+	}
+	if len(rows) != maxRawStatRows {
+		t.Fatalf("got %d rows, want %d", len(rows), maxRawStatRows)
+	}
+	// Отброшена самая старая запись с количеством 1, выведены записи от самой новой до второй по старшинству
+	if newest := strings.Fields(rows[0]); newest[len(newest)-1] != strconv.Itoa(len(stats)) {
+		t.Errorf("first row = %q, want the newest record with count %d", rows[0], len(stats))
+	}
+	if last := strings.Fields(rows[len(rows)-1]); last[len(last)-1] != "2" {
+		t.Errorf("last row = %q, want the record with count 2", rows[len(rows)-1])
+	}
+
+	grouped, err := mh.handleShow(ctx, "подтягивания по упражнениям", userID, langRU)
+	if err != nil {
+		t.Fatalf("handleShow() error = %v", err)
+	}
+	// Группировка считает все записи, ограничение на неё не действует: 45451 это сумма количеств от 1 до 301
+	wantGrouped := "```\n" +
+		"упражнение      кол-во    подходы\n" +
+		"подтягивания    45451     301\n" +
+		"```"
+	if len(grouped) != 1 || grouped[0] != wantGrouped {
+		t.Errorf("grouped statistic got:\n%s\nwant:\n%s", strings.Join(grouped, "\n"), wantGrouped)
+	}
+}
+
+type tgRequest struct {
+	method string
+	form   url.Values
+}
+
+// newHandlerWithFakeTg Создаёт обработчик, бот которого ходит в локальный сервер вместо Telegram.
+// Сервер отвечает успехом на любой метод, возвращаемая функция отдаёт принятые им запросы
+func newHandlerWithFakeTg(t *testing.T) (*MessageHandler, func() []tgRequest) {
+	var (
+		mu       sync.Mutex
+		requests []tgRequest
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("parse form of %s: %v", r.URL.Path, err)
+		}
+		mu.Lock()
+		requests = append(requests, tgRequest{method: path.Base(r.URL.Path), form: r.PostForm})
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true,"result":{"message_id":1}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	bot, err := tgbotapi.NewBotAPIWithAPIEndpoint(botCfg.Token, srv.URL+"/bot%s/%s")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := New(t.Context(), embedlog.NewDevLogger(), dbc, db.NewStatisticRepo(pgConn), bot, botCfg)
+
+	return h, func() []tgRequest {
+		mu.Lock()
+		defer mu.Unlock()
+		taken := requests
+		requests = nil
+		return taken
+	}
+}
+
+// newButtonPresser Создаёт обработчик с фейковым Telegram и нового пользователя.
+// Возвращаемая функция нажимает за пользователя inline-кнопку и отдаёт запросы, которыми бот на неё ответил
+func newButtonPresser(t *testing.T) (h *MessageHandler, userID string, press func(data string) []tgRequest) {
+	h, takeRequests := newHandlerWithFakeTg(t)
+	takeRequests() // Отбрасываем getMe, которым бот проверяет токен при создании
+
+	tgUserID := int64(dbtest.NextID())
+
+	return h, strconv.FormatInt(tgUserID, 10), func(data string) []tgRequest {
+		h.handleCallback(t.Context(), tgbotapi.Update{CallbackQuery: &tgbotapi.CallbackQuery{
+			ID:      "callback",
+			From:    &tgbotapi.User{ID: tgUserID, LanguageCode: "ru"},
+			Message: &tgbotapi.Message{MessageID: 7, Chat: &tgbotapi.Chat{ID: tgUserID}},
+			Data:    data,
+		}})
+		return takeRequests()
+	}
+}
+
+func TestMessageHandler_showByButtons(t *testing.T) {
+	h, userID, press := newButtonPresser(t)
+	defer addShowStatistics(t, userID)()
+
+	// editedText Возвращает текст, которым бот заменил сообщение с кнопками
+	editedText := func(t *testing.T, requests []tgRequest) (text, replyMarkup string) {
+		for _, r := range requests {
+			if r.method == "editMessageText" {
+				return r.form.Get("text"), r.form.Get("reply_markup")
+			}
+		}
+		t.Fatalf("bot did not edit the message, requests: %+v", requests)
+		return "", ""
+	}
+
+	tests := []struct {
+		name     string
+		exercise string
+		grouping string
+		want     string
+	}{
+		{
+			name:     "records as is",
+			exercise: "sa",
+			grouping: "sg|none",
+			want: "```\n" +
+				"дата                упражнение      вес     кол-во\n" +
+				"15.10.2025 12:35    подтягивания    -       12\n" +
+				"15.10.2025 12:30    подтягивания    -       10\n" +
+				"14.10.2025 12:05    жим лёжа        80кг    8\n" +
+				"```",
+		},
+		{
+			name:     "grouped by exercise",
+			exercise: "se|pullUp",
+			grouping: "sg|exercise",
+			want: "```\n" +
+				"упражнение      кол-во    подходы\n" +
+				"подтягивания    22        2\n" +
+				"```",
+		},
+		{
+			name:     "nothing found",
+			exercise: "se|pushUp",
+			grouping: "sg|none",
+			want:     messagesByLang[langRU][nothingFound],
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h.sessions.Set(userID, &UserSession{State: StateShowAwaitExercise, Lang: langRU})
+			press(tt.exercise)
+
+			// После периода бот не выводит статистику, а спрашивает про группировку
+			text, markup := editedText(t, press("sp|all"))
+			if !strings.HasSuffix(text, "всё время — сгруппировать?") {
+				t.Errorf("grouping step text = %q", text)
+			}
+			if !strings.Contains(markup, `"sg|none"`) || !strings.Contains(markup, `"sg|exercise"`) {
+				t.Errorf("grouping step keyboard = %s, want buttons sg|none and sg|exercise", markup)
+			}
+			session := h.sessions.Get(userID)
+			if session == nil || session.State != StateShowAwaitGrouping || session.ShowPeriod != allPeriod {
+				t.Fatalf("session after period step = %+v, want state %d with period %q", session, StateShowAwaitGrouping, allPeriod)
+			}
+
+			text, markup = editedText(t, press(tt.grouping))
+			if text != tt.want {
+				t.Errorf("statistic got:\n%s\nwant:\n%s", text, tt.want)
+			}
+			if markup != "" {
+				t.Errorf("keyboard must be removed with the result, got %s", markup)
+			}
+			if h.sessions.Get(userID) != nil {
+				t.Error("session must be deleted after the statistic is shown")
+			}
+		})
+	}
+}
+
+// Кнопки шагов статистики из старого сообщения не должны срабатывать без своего диалога и ломать чужой
+func TestMessageHandler_showByStaleButtons(t *testing.T) {
+	h, userID, press := newButtonPresser(t)
+
+	wantExpired := func(t *testing.T, requests []tgRequest) {
+		if len(requests) != 1 || requests[0].method != "answerCallbackQuery" || requests[0].form.Get("text") != messagesByLang[langRU][sessionExpired] {
+			t.Errorf("got requests %+v, want the only callback answer %q", requests, messagesByLang[langRU][sessionExpired])
+		}
+	}
+
+	t.Run("grouping button without session", func(t *testing.T) {
+		wantExpired(t, press("sg|exercise"))
+	})
+
+	// Кнопка каждого шага статистики, нажатая посреди добавления упражнения
+	staleButtons := []struct {
+		name string
+		data string
+	}{
+		{"exercise button", "se|pullUp"},
+		{"all exercises button", "sa"},
+		{"period button", "sp|week"},
+		{"grouping button", "sg|none"},
+	}
+	for _, tt := range staleButtons {
+		t.Run(tt.name+" of an old dialog does not break adding", func(t *testing.T) {
+			adding := UserSession{State: StateAwaitWeight, Lang: langRU, Exercise: benchPressEx}
+			h.sessions.Set(userID, &adding)
+			defer h.sessions.Delete(userID)
+
+			wantExpired(t, press(tt.data))
+			session := h.sessions.Get(userID)
+			if session == nil || session.State != adding.State || session.Exercise != adding.Exercise || session.ShowExercises != nil {
+				t.Errorf("adding session = %+v, want it untouched: state %d, exercise %q", session, adding.State, adding.Exercise)
+			}
+		})
+	}
+}
+
+// Границы периода и дата в выводе должны считаться в одном часовом поясе:
+// запись попадает в запрос за тот день, которым она показана
+func TestMessageHandler_handleShowTimeZone(t *testing.T) {
+	ctx := t.Context()
+	userID := dbtest.NextStringID()
+
+	msk := time.FixedZone("MSK", 3*60*60)
+	_, cl := dbtest.Statistic(t, pgConn, &db.Statistic{
+		TgUserID:  userID,
+		Exercise:  pullUpEx.String(),
+		Count:     10,
+		CreatedAt: time.Date(2025, 10, 16, 1, 30, 0, 0, msk),
+		StatusID:  db.StatusEnabled,
+	})
+	defer cl()
+
+	nothingFound := []string{messagesByLang[langRU][nothingFound]}
+	tests := []struct {
+		name   string
+		loc    *time.Location
+		rawMsg string
+		want   []string
+	}{
+		{
+			name:   "moscow shows the record on its moscow day",
+			loc:    msk,
+			rawMsg: "подтягивания за 16.10.2025",
+			want: []string{"```\n" +
+				"дата                упражнение      кол-во\n" +
+				"16.10.2025 01:30    подтягивания    10\n" +
+				"```"},
+		},
+		{
+			name:   "moscow does not show the record on the day before",
+			loc:    msk,
+			rawMsg: "подтягивания за 15.10.2025",
+			want:   nothingFound,
+		},
+		{
+			name:   "utc shows the same record on its utc day",
+			loc:    time.UTC,
+			rawMsg: "подтягивания за 15.10.2025",
+			want: []string{"```\n" +
+				"дата                упражнение      кол-во\n" +
+				"15.10.2025 22:30    подтягивания    10\n" +
+				"```"},
+		},
+		{
+			name:   "utc does not show the record on the day after",
+			loc:    time.UTC,
+			rawMsg: "подтягивания за 16.10.2025",
+			want:   nothingFound,
+		},
+		{
+			name:   "date range is inclusive in the handler time zone",
+			loc:    msk,
+			rawMsg: "подтягивания за 14.10.2025-16.10.2025 по упражнениям",
+			want: []string{"```\n" +
+				"упражнение      кол-во    подходы\n" +
+				"подтягивания    10        1\n" +
+				"```"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := botCfg
+			cfg.TimeZone = Location{Location: tt.loc}
+			h := New(ctx, embedlog.NewDevLogger(), dbc, db.NewStatisticRepo(pgConn), nil, cfg)
+
+			got, err := h.handleShow(ctx, tt.rawMsg, userID, langRU)
+			if err != nil {
+				t.Fatalf("handleShow() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("handleShow() got:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tt.want, "\n"))
+			}
+		})
+	}
+}
+
+func TestPeriodFromTextPeriodLocation(t *testing.T) {
+	// Четверг 2025-10-16 01:30 по Москве, в UTC это ещё среда 15-е
+	msk := time.FixedZone("MSK", 3*60*60)
+	now := time.Date(2025, 10, 16, 1, 30, 0, 0, msk)
+
+	tests := []struct {
+		name string
+		tp   textPeriod
+		want period
+	}{
+		{
+			name: "today starts at local midnight",
+			tp:   todayPeriod,
+			want: period{from: time.Date(2025, 10, 16, 0, 0, 0, 0, msk), to: now},
+		},
+		{
+			name: "yesterday is the previous local day",
+			tp:   yesterdayPeriod,
+			want: period{from: time.Date(2025, 10, 15, 0, 0, 0, 0, msk), to: time.Date(2025, 10, 16, 0, 0, 0, 0, msk)},
+		},
+		{
+			name: "weekday of today starts at local midnight",
+			tp:   weekdayThursdayPeriod,
+			want: period{from: time.Date(2025, 10, 16, 0, 0, 0, 0, msk), to: now},
+		},
+		{
+			name: "passed weekday is a full local day",
+			tp:   weekdayWednesdayPeriod,
+			want: period{from: time.Date(2025, 10, 15, 0, 0, 0, 0, msk), to: time.Date(2025, 10, 16, 0, 0, 0, 0, msk)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := mh.periodByTextPeriod(tt.tp, now)
+			if !ok {
+				t.Fatalf("periodByTextPeriod(%q) is not recognized", tt.tp)
+			}
+			if !got.from.Equal(tt.want.from) || !got.to.Equal(tt.want.to) {
+				t.Errorf("periodByTextPeriod(%q) = [%s, %s), want [%s, %s)", tt.tp, got.from, got.to, tt.want.from, tt.want.to)
+			}
+		})
 	}
 }

@@ -1,6 +1,9 @@
 package tg
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestExerciseRegistrationCompleteness(t *testing.T) {
 	orderSet := make(map[Exercise]struct{}, len(exerciseOrder))
@@ -80,6 +83,46 @@ func TestExerciseByLangSynonymConsistency(t *testing.T) {
 			}
 			if _, ok := orderSet[ex]; !ok {
 				t.Errorf("exerciseByLang[%s][%q] maps to %q which is not in exerciseOrder", lang, text, ex)
+			}
+		}
+	}
+}
+
+func TestGroupingRegistrationCompleteness(t *testing.T) {
+	for _, lang := range []language{langRU, langEN} {
+		for _, g := range groupingOrder {
+			if groupingTextByLang[lang][g] == "" {
+				t.Errorf("grouping %q: missing from groupingTextByLang[%s]", g, lang)
+			}
+		}
+
+		synonyms := make(map[statGrouping]struct{})
+		for text, g := range groupingByLang[lang] {
+			synonyms[g] = struct{}{}
+			if !slices.Contains(groupingOrder, g) {
+				t.Errorf("groupingByLang[%s][%q] maps to %q which is not in groupingOrder", lang, text, g)
+			}
+		}
+		for _, g := range groupingOrder {
+			if _, ok := synonyms[g]; !ok && g != noGrouping {
+				t.Errorf("grouping %q: no phrase in groupingByLang[%s]", g, lang)
+			}
+		}
+	}
+}
+
+// Фразы группировки отрезаются от конца запроса статистики до разбора упражнений и периодов,
+// поэтому название упражнения или периода не должно заканчиваться такой фразой
+func TestGroupingPhrasesDoNotCutExercisesAndPeriods(t *testing.T) {
+	for _, lang := range []language{langRU, langEN} {
+		for text := range exerciseByLang[lang] {
+			if cleaned, g := extractGrouping(text, lang); cleaned != text || g != noGrouping {
+				t.Errorf("exerciseByLang[%s][%q] is cut to %q with grouping %q", lang, text, cleaned, g)
+			}
+		}
+		for text := range periodByLang[lang] {
+			if cleaned, g := extractGrouping(text, lang); cleaned != text || g != noGrouping {
+				t.Errorf("periodByLang[%s][%q] is cut to %q with grouping %q", lang, text, cleaned, g)
 			}
 		}
 	}
