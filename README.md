@@ -9,7 +9,7 @@ The bot allows you to:
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.27+
 - PostgreSQL
 - Telegram Bot Token (get one from [@BotFather](https://t.me/BotFather))
 
@@ -37,6 +37,7 @@ Name = "your_bot_name"
 ReplyFormat = "markdown"
 Debug = false
 Timeout = "30s"
+TimeZone = "Europe/Moscow"
 
 [Database]
 Addr     = "localhost:5432"
@@ -44,6 +45,8 @@ User     = "postgres"
 Database = "sport_statsrv"
 Password = "postgres"
 ```
+
+`TimeZone` is the time zone (an IANA name) used both for period boundaries ("today", "for 15.03.2026") and for record dates in the output. If omitted, the server time zone is used.
 
 ### 3. Create the database
 
@@ -65,7 +68,7 @@ The bot will start listening for Telegram updates. Logs are written to `app.log`
 
 ### Getting started
 
-Send `/start` to the bot — a keyboard with three buttons will appear: **Add**, **Show**, **Help**.
+Send `/start` to the bot — a keyboard with three buttons will appear: **Add**, **Statistics**, **Help**.
 
 All commands can be entered as text or via buttons.
 
@@ -97,7 +100,7 @@ Compound time values are summed: `1h 30min` = 90 minutes.
 
 ### Viewing statistics
 
-Text format: `<command> <exercises> [period]`
+Text format: `<command> <exercises> [period] [grouping]`
 
 Commands: `show`, `покажи`, `показать`
 
@@ -109,6 +112,7 @@ show all for today
 show bench press squats for month
 show pull-ups for year
 show all
+show all for week by exercise
 ```
 
 Periods: `today`, `yesterday`, `week`, `last week`, `week before last`, `month`, `last month`, `month before last`, `year`, `last year`, `year before last`. Without a period — all time.
@@ -117,7 +121,18 @@ Weekdays are also supported: `monday` (or `mon`), `tuesday` (or `tue`), `wednesd
 
 Date formats are also supported: `15.03.2026` or a range `01.03.2026-15.03.2026`.
 
-Example output:
+By default every record is shown as is, newest first. Record time is shown in the time zone from the `TimeZone` setting. A single request shows at most the 300 latest records.
+
+```
+date                exercise       weight    reps
+15.03.2026 18:40    bench press    80kg      8
+15.03.2026 18:35    bench press    80kg      10
+15.03.2026 18:20    pull-ups       -         12
+14.03.2026 09:05    bench press    60kg      10
+14.03.2026 09:00    pull-ups       -         10
+```
+
+To group records by exercise and its parameters, add `by exercise` at the end of the request. Similar phrases work too: `by exercises`, `grouped`, `with grouping`, `summary`. A negation (`no grouping`, `without grouping`, `as is`) keeps the output ungrouped.
 
 ```
 exercise        weight  count     sets
@@ -141,6 +156,8 @@ Press **Add** — the bot will offer a list of exercises to choose from, then st
 If you frequently do the same exercises, the bot will show **Quick-Add** buttons — add with one tap based on your history.
 
 After adding via buttons, the bot will show a hint with a ready-made text command for quick copying and reuse.
+
+Press **Statistics** — the bot will offer to choose an exercise (or all of them), a period and the output mode: records as is or grouped by exercise.
 
 ## Supported exercises
 

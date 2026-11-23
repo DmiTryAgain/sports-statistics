@@ -98,7 +98,7 @@ func NewDevLogger() Logger {
 			ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 				// colorize errors
 				if err, ok := a.Value.Any().(error); ok {
-					if reflect.ValueOf(err).IsValid() && !isNil(a.Value) {
+					if reflect.ValueOf(err).IsValid() && !isNil(err) {
 						aErr := tint.Err(err)
 						aErr.Key = a.Key
 						return aErr
@@ -108,9 +108,11 @@ func NewDevLogger() Logger {
 				// show source
 				if a.Key == slog.SourceKey {
 					var file string
-					s, _ := a.Value.Any().(*slog.Source)
-					file = fmt.Sprintf("%s:%d", path.Base(s.File), s.Line)
-					a = slog.String("@source", file+"\t | ")
+					s, ok := a.Value.Any().(*slog.Source)
+					if ok {
+						file = fmt.Sprintf("%s:%d", path.Base(s.File), s.Line)
+						a = slog.String("@source", file+"\t | ")
+					}
 				}
 
 				if v, ok := a.Value.Any().(json.RawMessage); ok {
@@ -139,9 +141,11 @@ func NewLogger(verbose, isJSON bool) Logger {
 		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.SourceKey {
 				var file string
-				s, _ := a.Value.Any().(*slog.Source)
-				file = fmt.Sprintf("%s:%d", path.Base(s.File), s.Line)
-				a = slog.String("@source", file)
+				s, ok := a.Value.Any().(*slog.Source)
+				if ok {
+					file = fmt.Sprintf("%s:%d", path.Base(s.File), s.Line)
+					a = slog.String("@source", file)
+				}
 			}
 
 			if !isJSON && a.Key == slog.TimeKey {

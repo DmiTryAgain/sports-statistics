@@ -95,6 +95,16 @@ func TestParseCallbackData(t *testing.T) { //nolint:gocognit
 			want: CallbackAction{Type: cbShowPeriod, Period: todayPeriod},
 		},
 		{
+			name: "show grouping as is",
+			data: "sg|none",
+			want: CallbackAction{Type: cbShowGrouping, Grouping: noGrouping},
+		},
+		{
+			name: "show grouping by exercise",
+			data: "sg|exercise",
+			want: CallbackAction{Type: cbShowGrouping, Grouping: exerciseGrouping},
+		},
+		{
 			name: "page",
 			data: "pg|2|add",
 			want: CallbackAction{Type: cbExercisePage, Page: 2, Context: "add"},
@@ -135,6 +145,16 @@ func TestParseCallbackData(t *testing.T) { //nolint:gocognit
 			wantErr: true,
 		},
 		{
+			name:    "show grouping missing value",
+			data:    "sg",
+			wantErr: true,
+		},
+		{
+			name:    "show grouping unknown value",
+			data:    "sg|weekday",
+			wantErr: true,
+		},
+		{
 			name:    "weight invalid value",
 			data:    "w|abc",
 			wantErr: true,
@@ -167,6 +187,9 @@ func TestParseCallbackData(t *testing.T) { //nolint:gocognit
 			}
 			if got.Count != tt.want.Count {
 				t.Errorf("Count = %f, want %f", got.Count, tt.want.Count)
+			}
+			if got.Grouping != tt.want.Grouping {
+				t.Errorf("Grouping = %q, want %q", got.Grouping, tt.want.Grouping)
 			}
 			if got.Period != tt.want.Period {
 				t.Errorf("Period = %q, want %q", got.Period, tt.want.Period)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
 )
 
 type GroupedStatistic struct {
@@ -70,6 +71,31 @@ func (sr StatisticRepo) GroupedStatisticByFilters(ctx context.Context, search Gr
 	}
 
 	return gs, nil
+}
+
+// StatisticsByPeriods Возвращает включённые записи от новых к старым, созданные в любом из периодов [From, To).
+// Без периодов отбирает за всё время. В total количество подходящих записей без учёта limit
+func (sr StatisticRepo) StatisticsByPeriods(ctx context.Context, search *StatisticSearch, periods []Period, limit int) (statistics []Statistic, total int, err error) {
+	newestFirst := WithSort(
+		SortField{Column: Columns.Statistic.CreatedAt, Direction: SortDesc},
+		SortField{Column: Columns.Statistic.ID, Direction: SortDesc},
+	)
+	q := buildQuery(ctx, sr.db, &statistics, search, []Filter{StatusEnabledFilter}, Pager{PageSize: limit}, newestFirst)
+
+	if len(periods) != 0 {
+		q.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			for _, p := range periods {
+				q.WhereOr(`t."createdAt" >= ? AND t."createdAt" < ?`, p.From, p.To)
+			}
+			return q, nil
+		})
+	}
+
+	if total, err = q.SelectAndCount(); err != nil {
+		return nil, 0, fmt.Errorf("statistics by search=%+v, periods=%+v, err=%w", search, periods, err)
+	}
+
+	return statistics, total, nil
 }
 
 // FrequentExercise описывает часто используемую комбинацию упражнения с параметрами

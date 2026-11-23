@@ -2,13 +2,10 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-pg/pg/v10"
 	"github.com/vmkteam/embedlog"
-	zm "github.com/vmkteam/zenrpc-middleware"
-	"github.com/vmkteam/zenrpc/v2"
 )
 
 type QueryLogger struct {
@@ -29,10 +26,9 @@ func (ql QueryLogger) BeforeQuery(ctx context.Context, event *pg.QueryEvent) (co
 }
 
 func (ql QueryLogger) AfterQuery(ctx context.Context, event *pg.QueryEvent) error {
-	method := fmt.Sprintf("%s.%s", zenrpc.NamespaceFromContext(ctx), zm.MethodFromContext(ctx))
 	query, err := event.FormattedQuery()
 	if err != nil {
-		ql.Error(ctx, string(query), "err", err, "rpc", method)
+		ql.Error(ctx, string(query), "err", err)
 	}
 
 	var since time.Duration
@@ -44,6 +40,6 @@ func (ql QueryLogger) AfterQuery(ctx context.Context, event *pg.QueryEvent) erro
 		}
 	}
 
-	ql.Log().DebugContext(ctx, string(query), "rpc", method, "duration", since)
+	ql.Log().DebugContext(ctx, string(query), "duration", since)
 	return nil
 }

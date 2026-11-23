@@ -178,7 +178,7 @@ linters:
       # Default: [ switch ]
       check:
         - switch
-        - map
+        - mapliteral
 
     exhaustruct:
       # List of regular expressions to exclude struct packages and their names from checks.
@@ -382,6 +382,9 @@ linters:
       - text: 'comment on exported \S+ \S+ should be of the form ".+"'
         source: '// ?(nolint|TODO)'
         linters: [ revive, staticcheck ]
+      # Dictionary keys are words typed by users, a match with an internal constant value is a coincidence
+      - path: 'pkg/tg/dictionary\.go'
+        linters: [ goconst ]
       - path: '_test\.go'
         linters:
           - bodyclose

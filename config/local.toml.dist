@@ -4,6 +4,7 @@ Name=sportsStatisticsBot
 ReplyFormat=markdown
 Debug=true
 Timeout=30s
+TimeZone="Europe/Moscow"
 
 [Database]
 Addr            = "localhost:5434"

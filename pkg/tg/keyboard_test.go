@@ -283,6 +283,38 @@ func TestPeriodInlineKeyboard(t *testing.T) {
 	}
 }
 
+func TestGroupingInlineKeyboard(t *testing.T) {
+	kb := groupingInlineKeyboard(langRU)
+
+	if len(kb.InlineKeyboard) != 2 {
+		t.Fatalf("expected grouping row and cancel row, got %d rows", len(kb.InlineKeyboard))
+	}
+
+	// Кнопки группировки идут в порядке groupingOrder: сначала вывод без группировки
+	wantButtons := []struct{ text, data string }{
+		{"Без группировки", "sg|none"},
+		{"По упражнениям", "sg|exercise"},
+	}
+	groupingRow := kb.InlineKeyboard[0]
+	if len(groupingRow) != len(wantButtons) {
+		t.Fatalf("expected %d grouping buttons, got %d", len(wantButtons), len(groupingRow))
+	}
+	for i, want := range wantButtons {
+		if groupingRow[i].Text != want.text || *groupingRow[i].CallbackData != want.data {
+			t.Errorf("button %d = %q with callback %q, want %q with callback %q", i, groupingRow[i].Text, *groupingRow[i].CallbackData, want.text, want.data)
+		}
+	}
+
+	// Последняя строка — отмена
+	if *kb.InlineKeyboard[1][0].CallbackData != "x" {
+		t.Errorf("expected cancel button, got %s", *kb.InlineKeyboard[1][0].CallbackData)
+	}
+
+	if text := groupingInlineKeyboard(langEN).InlineKeyboard[0][1].Text; text != "By exercise" {
+		t.Errorf("expected en grouping button By exercise, got %q", text)
+	}
+}
+
 func TestShowExerciseInlineKeyboard(t *testing.T) {
 	exercises := []string{"pullUp", "benchPress", "jogging"}
 	kb := showExerciseInlineKeyboard(exercises, langRU)

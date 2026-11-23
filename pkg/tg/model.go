@@ -344,31 +344,66 @@ func NewGroupedStatisticList(in []db.GroupedStatistic, lang language) []GroupedS
 	return res
 }
 
-func anyHasWeight(stats []GroupedStatistic) bool {
-	for _, s := range stats {
-		if s.WeightKg != nil {
-			return true
-		}
-	}
-	return false
+type Statistic struct {
+	db.Statistic
+	TranslatedExercise string
 }
 
-func anyHasDistance(stats []GroupedStatistic) bool {
-	for _, s := range stats {
-		if s.DistanceM != nil {
-			return true
-		}
+func NewStatistic(in db.Statistic, lang language) Statistic {
+	return Statistic{
+		Statistic:          in,
+		TranslatedExercise: exTextByLang[lang][Exercise(in.Exercise)],
 	}
-	return false
 }
 
-func anyHasDuration(stats []GroupedStatistic) bool {
-	for _, s := range stats {
-		if s.DurationSec != nil {
-			return true
+func NewStatisticList(in []db.Statistic, lang language) []Statistic {
+	res := make([]Statistic, len(in))
+	for i := range in {
+		res[i] = NewStatistic(in[i], lang)
+	}
+
+	return res
+}
+
+// statGrouping Способ группировки записей при выводе статистики
+type statGrouping string
+
+// tableColumn Колонка таблицы статистики: заголовок и по ячейке на каждую строку
+type tableColumn struct {
+	header string
+	cells  []string
+}
+
+// paramColumns Собирает колонки веса, дистанции и времени. Параметр без значения выводится прочерком,
+// а колонка параметра, не заданного ни в одной строке, пропускается целиком
+func paramColumns(params []db.StatisticParams, lang language) []tableColumn {
+	defs := []struct {
+		header int
+		value  func(db.StatisticParams) *float64
+		format func(float64, language) string
+	}{
+		{tableWeightCol, func(p db.StatisticParams) *float64 { return p.WeightKg }, formatWeight},
+		{tableDistCol, func(p db.StatisticParams) *float64 { return p.DistanceM }, formatDistance},
+		{tableTimeCol, func(p db.StatisticParams) *float64 { return p.DurationSec }, formatDuration},
+	}
+
+	var cols []tableColumn
+	for _, d := range defs {
+		cells := make([]string, len(params))
+		var hasValue bool
+		for i, p := range params {
+			cells[i] = "-"
+			if v := d.value(p); v != nil {
+				cells[i] = d.format(*v, lang)
+				hasValue = true
+			}
+		}
+		if hasValue {
+			cols = append(cols, tableColumn{header: messagesByLang[lang][d.header], cells: cells})
 		}
 	}
-	return false
+
+	return cols
 }
 
 func formatWeight(kg float64, lang language) string {
